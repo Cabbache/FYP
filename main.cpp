@@ -513,8 +513,8 @@ int main(int argc, char **argv){
 	vector<Triangle> triangles = loadTriangles("bunny.obj");
 	cerr << "Making OCT" << endl;
 	OCT oct(triangles);
-	cerr << "Loading sdf" << endl;
-	SDF sdf;
+	//cerr << "Loading sdf" << endl;
+	//SDF sdf;
 	//loadSDF(sdf, "bunny.sdf");
 	cerr << "Loading complete" << endl;
 
