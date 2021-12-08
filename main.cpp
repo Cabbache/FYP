@@ -6,6 +6,7 @@
 #include <sstream>
 #include <chrono>
 #include <set>
+#include <limits>
 
 #include "vec3.h"
 #include "tiny_obj_loader.h"
@@ -393,7 +394,7 @@ vector<double> rayValues(const SDF &sdf, const vec3 &origin, vec3 ray){
 	return values;
 }
 
-vec3 get_color(vec3 origin, vec3 ray, OCT &oct, int depth=0){
+vec3 get_color(vec3 origin, vec3 ray, vector<Triangle> &triangles, SDF &sdf, int depth=0){
 
 	//sometimes rays get stuck inside the 3d model
 	if (depth > 40)
@@ -404,25 +405,22 @@ vec3 get_color(vec3 origin, vec3 ray, OCT &oct, int depth=0){
 		ray,
 		origin,
 		false,
-		0.0f,
+		std::numeric_limits<float>::max(),
 	};
 
 	//check if sdf on ray contains negative value
-	//vector<double> values = rayValues(sdf, origin, ray);
-	//if (values.size() < 30)
-		//cerr << "less than 30: " << values.size() << endl;
-	//bool hit = false;
-	//double hit_distance = 0;
-	//for (int i = 0;i < values.size();i++){
-		//if (values.at(i) > 0) continue;
-		//hit = true;
-		//hit_distance = i*sdf.resolution;
-		//break;
-	//}
+	vector<double> values = rayValues(sdf, origin, ray);
+	if (values.size() < 30)
+		cerr << "less than 30: " << values.size() << endl;
+	bool hit = false;
+	double hit_distance = 0;
+	for (int i = 0;i < values.size();i++){
+		if (values.at(i) > 0) continue;
+		hit = true;
+		hit_distance = i*sdf.resolution;
+		break;
+	}
 
-	vector<Triangle> triangles;
-	oct.getGroup(origin, ray, triangles);
-	bool hit = triangles.size() != 0;
 	if (hit){
 		for (Triangle tri : triangles){
 			hitInfo check = {
@@ -434,25 +432,20 @@ vec3 get_color(vec3 origin, vec3 ray, OCT &oct, int depth=0){
 			triHit(tri, check);
 			if (!check.hit)
 				continue;
-			if (!closest.hit){
-				closest = check;
-				closestTri = tri;
-				continue;
-			}
 			
-			//exit if triangle hit is closest as predicted by sdf (+- resolution range may be adjusted)
-			//double travelled = (ray*check.t).length();
-			//if (
-				//travelled >= hit_distance - sdf.resolution &&
-				//travelled <= hit_distance + sdf.resolution
-			//) {
-				//break;
-			//}
-
 			if (closest.t < check.t)
 				continue;
 			closest = check;
 			closestTri = tri;
+
+			//exit if triangle hit is closest to camera as predicted by sdf (+- resolution range may need adjustment)
+			double travelled = (ray*check.t).length();
+			if (
+				travelled >= hit_distance - sdf.resolution &&
+				travelled <= hit_distance + sdf.resolution
+			) {
+				break;
+			}
 		}
 	}
 
@@ -478,7 +471,7 @@ vec3 get_color(vec3 origin, vec3 ray, OCT &oct, int depth=0){
 		//vec3 deflect = unit_vector(vec3(drand()-0.5, drand()-0.5, drand()-0.5));
 		//reflected += deflect / 20;
 
-		return get_color(hitpoint, reflected, oct, ++depth);
+		return get_color(hitpoint, reflected, triangles, sdf, ++depth);
 	}
 
 	//if hit border of non mirror triangle, make border black
@@ -500,22 +493,24 @@ int main(int argc, char **argv){
 	//const unsigned int image_width = 800;
 	//const unsigned int image_height = 600;
 
-	const unsigned int image_width = 2560;
-	const unsigned int image_height = 1440;
+	const unsigned int image_width = 200;
+	const unsigned int image_height = 150;
+
+	//const unsigned int image_width = 2560;
+	//const unsigned int image_height = 1440;
 
 	const unsigned int aliasing_iters = 2;
 	const double angle = 3.0;
-	//const double cam_distance = 0.35;
-	const double cam_distance = 0.5;
+	const double cam_distance = 0.35;
+	//const double cam_distance = 0.5;
 	const double aspect = (double)image_width / image_height;
 
 	cerr << "Loading obj" << endl;
 	vector<Triangle> triangles = loadTriangles("bunny.obj");
-	cerr << "Making OCT" << endl;
-	OCT oct(triangles);
 	cerr << "Loading sdf" << endl;
 	SDF sdf;
-	//loadSDF(sdf, "bunny.sdf");
+	//loadSDF(sdf, "../my_source/bunny.sdf");
+	loadSDF(sdf, "../files/bunny_1k_33.sdf");
 	cerr << "Loading complete" << endl;
 
 	for (double angle_loop = 0;angle_loop < 360;angle_loop += angle){
@@ -553,7 +548,7 @@ int main(int argc, char **argv){
 						0
 					);
 					ray = rotateY(ray, angle_loop);
-					average += get_color(camera_origin, ray, oct);
+					average += get_color(camera_origin, ray, triangles, sdf);
 				}
 				average /= aliasing_iters;
 				image[y*image_width + x] = average;
