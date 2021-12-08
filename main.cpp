@@ -470,8 +470,8 @@ int main(int argc, char **argv){
 	//const unsigned int image_width = 800;
 	//const unsigned int image_height = 600;
 
-	const unsigned int image_width = 200;
-	const unsigned int image_height = 150;
+	const unsigned int image_width = 400;
+	const unsigned int image_height = 300;
 
 	const unsigned int aliasing_iters = 2;
 	const double angle = 3.0;
