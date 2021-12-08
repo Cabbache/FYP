@@ -496,9 +496,6 @@ int main(int argc, char **argv){
 	const unsigned int image_width = 200;
 	const unsigned int image_height = 150;
 
-	//const unsigned int image_width = 2560;
-	//const unsigned int image_height = 1440;
-
 	const unsigned int aliasing_iters = 2;
 	const double angle = 3.0;
 	const double cam_distance = 0.35;
@@ -509,10 +506,10 @@ int main(int argc, char **argv){
 	vector<Triangle> triangles = loadTriangles("bunny.obj");
 	cerr << "Loading sdf" << endl;
 	SDF sdf;
-	//loadSDF(sdf, "../my_source/bunny.sdf");
 	loadSDF(sdf, "../files/bunny_1k_33.sdf");
 	cerr << "Loading complete" << endl;
 
+	auto global_start = std::chrono::system_clock::now();
 	for (double angle_loop = 0;angle_loop < 360;angle_loop += angle){
 		ofstream ppm("img_"+to_string(int(angle_loop))+".ppm");
 
@@ -566,5 +563,8 @@ int main(int argc, char **argv){
 		}
 		ppm.close();
 	}
+	auto global_end = std::chrono::system_clock::now();
+	std::chrono::duration<double> global_elapsed = global_end - global_start;
+	cerr << "total duration: " << global_elapsed.count() << endl;
 	return 0;
 }
