@@ -6,6 +6,7 @@
 #include <sstream>
 #include <chrono>
 #include <set>
+#include <limits>
 
 #include "vec3.h"
 #include "tiny_obj_loader.h"
@@ -393,7 +394,7 @@ vector<double> rayValues(const SDF &sdf, const vec3 &origin, vec3 ray){
 	return values;
 }
 
-vec3 get_color(vec3 origin, vec3 ray, OCT &oct, int depth=0){
+vec3 get_color(vec3 origin, vec3 ray, const vector<Triangle> &triangles, int depth=0){
 
 	//sometimes rays get stuck inside the 3d model
 	if (depth > 40)
@@ -404,56 +405,25 @@ vec3 get_color(vec3 origin, vec3 ray, OCT &oct, int depth=0){
 		ray,
 		origin,
 		false,
-		0.0f,
+		std::numeric_limits<float>::max()
 	};
 
-	//check if sdf on ray contains negative value
-	//vector<double> values = rayValues(sdf, origin, ray);
-	//if (values.size() < 30)
-		//cerr << "less than 30: " << values.size() << endl;
-	//bool hit = false;
-	//double hit_distance = 0;
-	//for (int i = 0;i < values.size();i++){
-		//if (values.at(i) > 0) continue;
-		//hit = true;
-		//hit_distance = i*sdf.resolution;
-		//break;
-	//}
+	for (Triangle tri : triangles){
+		hitInfo check = {
+			ray,
+			origin,
+			false,
+			0.0f
+		};
 
-	vector<Triangle> triangles;
-	oct.getGroup(origin, ray, triangles);
-	bool hit = triangles.size() != 0;
-	if (hit){
-		for (Triangle tri : triangles){
-			hitInfo check = {
-				ray,
-				origin,
-				false,
-				0.0f
-			};
-			triHit(tri, check);
-			if (!check.hit)
-				continue;
-			if (!closest.hit){
-				closest = check;
-				closestTri = tri;
-				continue;
-			}
-			
-			//exit if triangle hit is closest as predicted by sdf (+- resolution range may be adjusted)
-			//double travelled = (ray*check.t).length();
-			//if (
-				//travelled >= hit_distance - sdf.resolution &&
-				//travelled <= hit_distance + sdf.resolution
-			//) {
-				//break;
-			//}
+		triHit(tri, check);
+		if (!check.hit)
+			continue;
 
-			if (closest.t < check.t)
-				continue;
-			closest = check;
-			closestTri = tri;
-		}
+		if (closest.t < check.t)
+			continue;
+		closest = check;
+ 		closestTri = tri;
 	}
 
 	//if no triangles hit color the background
@@ -478,7 +448,7 @@ vec3 get_color(vec3 origin, vec3 ray, OCT &oct, int depth=0){
 		//vec3 deflect = unit_vector(vec3(drand()-0.5, drand()-0.5, drand()-0.5));
 		//reflected += deflect / 20;
 
-		return get_color(hitpoint, reflected, oct, ++depth);
+		return get_color(hitpoint, reflected, triangles, ++depth);
 	}
 
 	//if hit border of non mirror triangle, make border black
@@ -500,8 +470,8 @@ int main(int argc, char **argv){
 	//const unsigned int image_width = 800;
 	//const unsigned int image_height = 600;
 
-	const unsigned int image_width = 2560;
-	const unsigned int image_height = 1440;
+	const unsigned int image_width = 200;
+	const unsigned int image_height = 150;
 
 	const unsigned int aliasing_iters = 2;
 	const double angle = 3.0;
@@ -511,13 +481,9 @@ int main(int argc, char **argv){
 
 	cerr << "Loading obj" << endl;
 	vector<Triangle> triangles = loadTriangles("bunny.obj");
-	cerr << "Making OCT" << endl;
-	OCT oct(triangles);
-	//cerr << "Loading sdf" << endl;
-	//SDF sdf;
-	//loadSDF(sdf, "bunny.sdf");
 	cerr << "Loading complete" << endl;
 
+	auto global_start = std::chrono::system_clock::now();
 	for (double angle_loop = 0;angle_loop < 360;angle_loop += angle){
 		ofstream ppm("img_"+to_string(int(angle_loop))+".ppm");
 
@@ -553,7 +519,7 @@ int main(int argc, char **argv){
 						0
 					);
 					ray = rotateY(ray, angle_loop);
-					average += get_color(camera_origin, ray, oct);
+					average += get_color(camera_origin, ray, triangles);
 				}
 				average /= aliasing_iters;
 				image[y*image_width + x] = average;
@@ -571,5 +537,8 @@ int main(int argc, char **argv){
 		}
 		ppm.close();
 	}
+	auto global_end = std::chrono::system_clock::now();
+	std::chrono::duration<double> global_elapsed = global_end - global_start;
+	cerr << "total duration: " << global_elapsed.count() << endl;
 	return 0;
 }
