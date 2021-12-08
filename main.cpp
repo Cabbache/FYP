@@ -6,6 +6,7 @@
 #include <sstream>
 #include <chrono>
 #include <set>
+#include <limits>
 
 #include "vec3.h"
 #include "tiny_obj_loader.h"
@@ -404,21 +405,8 @@ vec3 get_color(vec3 origin, vec3 ray, OCT &oct, int depth=0){
 		ray,
 		origin,
 		false,
-		0.0f,
+		std::numeric_limits<float>::max(),
 	};
-
-	//check if sdf on ray contains negative value
-	//vector<double> values = rayValues(sdf, origin, ray);
-	//if (values.size() < 30)
-		//cerr << "less than 30: " << values.size() << endl;
-	//bool hit = false;
-	//double hit_distance = 0;
-	//for (int i = 0;i < values.size();i++){
-		//if (values.at(i) > 0) continue;
-		//hit = true;
-		//hit_distance = i*sdf.resolution;
-		//break;
-	//}
 
 	vector<Triangle> triangles;
 	oct.getGroup(origin, ray, triangles);
@@ -431,23 +419,10 @@ vec3 get_color(vec3 origin, vec3 ray, OCT &oct, int depth=0){
 				false,
 				0.0f
 			};
+
 			triHit(tri, check);
 			if (!check.hit)
 				continue;
-			if (!closest.hit){
-				closest = check;
-				closestTri = tri;
-				continue;
-			}
-			
-			//exit if triangle hit is closest as predicted by sdf (+- resolution range may be adjusted)
-			//double travelled = (ray*check.t).length();
-			//if (
-				//travelled >= hit_distance - sdf.resolution &&
-				//travelled <= hit_distance + sdf.resolution
-			//) {
-				//break;
-			//}
 
 			if (closest.t < check.t)
 				continue;
@@ -500,8 +475,11 @@ int main(int argc, char **argv){
 	//const unsigned int image_width = 800;
 	//const unsigned int image_height = 600;
 
-	const unsigned int image_width = 2560;
-	const unsigned int image_height = 1440;
+	const unsigned int image_width = 400;
+	const unsigned int image_height = 300;
+
+	//const unsigned int image_width = 2560;
+	//const unsigned int image_height = 1440;
 
 	const unsigned int aliasing_iters = 2;
 	const double angle = 3.0;
@@ -513,11 +491,9 @@ int main(int argc, char **argv){
 	vector<Triangle> triangles = loadTriangles("bunny.obj");
 	cerr << "Making OCT" << endl;
 	OCT oct(triangles);
-	//cerr << "Loading sdf" << endl;
-	//SDF sdf;
-	//loadSDF(sdf, "bunny.sdf");
 	cerr << "Loading complete" << endl;
 
+	auto global_start = std::chrono::system_clock::now();
 	for (double angle_loop = 0;angle_loop < 360;angle_loop += angle){
 		ofstream ppm("img_"+to_string(int(angle_loop))+".ppm");
 
@@ -571,5 +547,8 @@ int main(int argc, char **argv){
 		}
 		ppm.close();
 	}
+	auto global_end = std::chrono::system_clock::now();
+	std::chrono::duration<double> global_elapsed = global_end - global_start;
+	cerr << "total duration: " << global_elapsed.count() << endl;
 	return 0;
 }
