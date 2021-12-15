@@ -381,17 +381,18 @@ void triHit(const Triangle &tri, hitInfo &info){
 	info.gamma = gamma;
 }
 
-//ray marching, returns vector of sdf points on ray
-vector<double> rayValues(const SDF &sdf, const vec3 &origin, vec3 ray){
-	ray = unit_vector(ray) * sdf.resolution;
+void marchSDF(const SDF &sdf, hitInfo &info){
+	//assumes info.ray is unit vector
 	SDFResult sres;
-	vector<double> values;
 	vec3 p;
-	for (p = origin;getValue(sdf, p, sres);p += ray)
-		values.push_back(sres.value);
-	int exp = (p-origin).length()/sdf.resolution;
-	int actual = values.size();
-	return values;
+	info.hit = false;
+	for (p = info.origin;getValue(sdf, p, sres);p += info.ray*abs(sres.value)){
+		if (sres.value <= 0){
+			info.hit = true;
+			info.t = (p-info.origin).length();
+			return;
+		}
+	}
 }
 
 vec3 get_color(vec3 origin, vec3 ray, vector<Triangle> &triangles, SDF &sdf, int depth=0){
@@ -400,6 +401,7 @@ vec3 get_color(vec3 origin, vec3 ray, vector<Triangle> &triangles, SDF &sdf, int
 	if (depth > 40)
 		return vec3(0,0,0);
 		
+	ray = unit_vector(ray);
 	Triangle closestTri;
 	hitInfo closest = {
 		ray,
@@ -409,19 +411,16 @@ vec3 get_color(vec3 origin, vec3 ray, vector<Triangle> &triangles, SDF &sdf, int
 	};
 
 	//check if sdf on ray contains negative value
-	vector<double> values = rayValues(sdf, origin, ray);
-	if (values.size() < 30)
-		cerr << "less than 30: " << values.size() << endl;
-	bool hit = false;
-	double hit_distance = 0;
-	for (int i = 0;i < values.size();i++){
-		if (values.at(i) > 0) continue;
-		hit = true;
-		hit_distance = i*sdf.resolution;
-		break;
-	}
+	hitInfo march = {
+		ray,
+		origin,
+		false,
+		0,
+	};
+	marchSDF(sdf, march);
+	double hit_distance = march.t;
 
-	if (hit){
+	if (march.hit){
 		for (Triangle tri : triangles){
 			hitInfo check = {
 				ray,
@@ -493,12 +492,12 @@ int main(int argc, char **argv){
 	//const unsigned int image_width = 800;
 	//const unsigned int image_height = 600;
 
-	const unsigned int image_width = 200;
-	const unsigned int image_height = 150;
+	const unsigned int image_width = 400;
+	const unsigned int image_height = 300;
 
 	const unsigned int aliasing_iters = 2;
 	const double angle = 3.0;
-	const double cam_distance = 0.35;
+	const double cam_distance = 0.3;
 	//const double cam_distance = 0.5;
 	const double aspect = (double)image_width / image_height;
 
@@ -506,7 +505,7 @@ int main(int argc, char **argv){
 	vector<Triangle> triangles = loadTriangles("bunny.obj");
 	cerr << "Loading sdf" << endl;
 	SDF sdf;
-	loadSDF(sdf, "../files/bunny_1k_33.sdf");
+	loadSDF(sdf, "../files/bunny_1k_1000.sdf");
 	cerr << "Loading complete" << endl;
 
 	auto global_start = std::chrono::system_clock::now();
