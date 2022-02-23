@@ -492,8 +492,8 @@ int main(int argc, char **argv){
 	//const unsigned int image_width = 800;
 	//const unsigned int image_height = 600;
 
-	const unsigned int image_width = 400;
-	const unsigned int image_height = 300;
+	const unsigned int image_width = 200;
+	const unsigned int image_height = 150;
 
 	const unsigned int aliasing_iters = 2;
 	const double angle = 3.0;
@@ -502,10 +502,10 @@ int main(int argc, char **argv){
 	const double aspect = (double)image_width / image_height;
 
 	cerr << "Loading obj" << endl;
-	vector<Triangle> triangles = loadTriangles("bunny.obj");
+	vector<Triangle> triangles = loadTriangles("bunny_1k.obj");
 	cerr << "Loading sdf" << endl;
 	SDF sdf;
-	loadSDF(sdf, "../files/bunny_1k_1000.sdf");
+	loadSDF(sdf, "bunny_1k_33.sdf");
 	cerr << "Loading complete" << endl;
 
 	auto global_start = std::chrono::system_clock::now();
