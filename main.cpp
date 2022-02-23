@@ -467,20 +467,17 @@ vec3 get_color(vec3 origin, vec3 ray, const vector<Triangle> &triangles, int dep
 }
 
 int main(int argc, char **argv){
-	//const unsigned int image_width = 800;
-	//const unsigned int image_height = 600;
-
-	const unsigned int image_width = 400;
-	const unsigned int image_height = 300;
+	const unsigned int image_width = 200;
+	const unsigned int image_height = 150;
 
 	const unsigned int aliasing_iters = 2;
 	const double angle = 3.0;
 	//const double cam_distance = 0.35;
-	const double cam_distance = 0.5;
+	const double cam_distance = 0.3;
 	const double aspect = (double)image_width / image_height;
 
 	cerr << "Loading obj" << endl;
-	vector<Triangle> triangles = loadTriangles("bunny.obj");
+	vector<Triangle> triangles = loadTriangles("bunny_1k.obj");
 	cerr << "Loading complete" << endl;
 
 	auto global_start = std::chrono::system_clock::now();
