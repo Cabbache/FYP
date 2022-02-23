@@ -387,7 +387,7 @@ void marchSDF(const SDF &sdf, hitInfo &info){
 	vec3 p;
 	info.hit = false;
 	for (p = info.origin;getValue(sdf, p, sres);p += info.ray*abs(sres.value)){
-		if (sres.value <= 0){
+		if (sres.value <= sdf.resolution){ //what about <= sdf.resolution
 			info.hit = true;
 			info.t = (p-info.origin).length();
 			return;
@@ -492,13 +492,12 @@ int main(int argc, char **argv){
 	//const unsigned int image_width = 800;
 	//const unsigned int image_height = 600;
 
-	const unsigned int image_width = 200;
-	const unsigned int image_height = 150;
+	const unsigned int image_width = 1280;
+	const unsigned int image_height = 960;
 
 	const unsigned int aliasing_iters = 2;
-	const double angle = 3.0;
-	const double cam_distance = 0.3;
-	//const double cam_distance = 0.5;
+	const double angle = 1.0;
+	const double cam_distance = 0.5;
 	const double aspect = (double)image_width / image_height;
 
 	cerr << "Loading obj" << endl;
@@ -522,7 +521,7 @@ int main(int argc, char **argv){
 		double frame_height = frame_width / aspect;
 		double eye_frame_distance = 1; //or focal length?
 
-		vec3 camera_origin = vec3(0,0.2,-cam_distance);
+		vec3 camera_origin = vec3(0,0.23,-cam_distance);
 		camera_origin = rotateY(camera_origin, angle_loop);
 
 		vec3 frame_topleft = vec3(-frame_width/2, frame_height/2, eye_frame_distance);
@@ -530,7 +529,7 @@ int main(int argc, char **argv){
 		
 		cerr << "Starting timer" << endl;
 		auto start = std::chrono::system_clock::now();
-		#pragma omp parallel for
+		#pragma omp parallel for num_threads(4)
 		for (int y = 0;y < image_height;y++){
 			for (int x = 0;x < image_width;x++){
 				vec3 average(0,0,0);
