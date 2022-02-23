@@ -12,3 +12,5 @@
 *.swp
 *.ppm
 *.obj
+
+results/
