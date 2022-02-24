@@ -7,11 +7,14 @@
 #include <chrono>
 #include <set>
 #include <limits>
+#include <unordered_map>
 
 #include "vec3.h"
 #include "tiny_obj_loader.h"
 
 using namespace std;
+
+const double grid_resolution = 0.03;//cell size
 
 typedef struct Triangle{
 	vec3 p[3];
@@ -43,159 +46,14 @@ typedef struct SDF{
 	double ***values;
 } SDF;
 
+typedef unordered_map<vec3_int, vector<Triangle>, hashFunc, equalsFunc> GridMap;
+
 //used for the function that returns sdf value given world coordinate
 //if world coordinate is outside sdf domain, inside = false
 typedef struct SDFResult{
 	bool inside;
 	double value;
 } SDFResult;
-
-static int gcount = 0;
-
-//test with 1000 triangles 200x150:
-//38 seconds - no oct
-//25 seconds - oct leafel = 25
-//27 seconds - oct leafel = 5
-//23 seconds - oct leafel = 50
-class OCT{
-	public:
-		OCT(const vector<Triangle> &triangles, int leafElements=50){
-			box = {
-				vec3(0,0,0),
-				vec3(0,0,0)
-			};
-			for (int i = 0;i < triangles.size();i++){
-				Triangle tri = triangles.at(i);
-				for (int j = 0;j < 3;j++){
-					box.min.min(tri.p[j]);
-					box.max.max(tri.p[j]);
-				}
-			}
-
-			if (isLeaf = triangles.size() <= leafElements){
-				leafTri = triangles;
-				return;	
-			}
-
-			sep = vec3(
-				(box.max[0] + box.min[0]) / 2,
-				(box.max[1] + box.min[1]) / 2,
-				(box.max[2] + box.min[2]) / 2
-			);
-			
-			vector<Triangle> octs[8];
-			for (int i = 0;i < triangles.size();i++){
-				Triangle tri = triangles.at(i);
-				std::set<int> adds;
-				for (int j = 0;j < 1;j++){ //TODO investigate if j < 1 or j < 3
-					adds.insert(
-						(tri.p[j].x() > sep.x()) << 2 |
-						(tri.p[j].y() > sep.y()) << 1 |
-						(tri.p[j].z() > sep.z()) << 0
-					);
-				}
-				for (auto it = adds.begin();it != adds.end();it++)
-					octs[*it].push_back(tri);
-			}
-			
-			for (int i = 0;i < 8;i++){
-				if (octs[i].size() == triangles.size() && (isLeaf = true)){
-					leafTri = triangles;
-					return;
-				}
-			}
-
-			for (int i = 0;i < 8;i++)
-				children[i] = new OCT(octs[i]);
-		}
-
-		void getGroup(vec3 &ray, vec3 &origin, vector<Triangle> &tris) {
-			if (isLeaf){
-				tris = leafTri;
-				return;
-			}
-
-			for (int i = 0;i < 8;i++){
-				hitInfo info;
-				children[i]->boxHit(ray, origin, info);
-				if (!info.hit)
-					continue;
-				vector<Triangle> ctris;
-				children[i]->getGroup(ray, origin, ctris);
-				tris.insert(tris.end(), ctris.begin(), ctris.end());
-			}
-		}
-
-	private:
-		Volume getBox(){
-			return box;
-		}
-
-		vec3 getSep(){
-			return sep;
-		}
-
-		//https://www.scratchapixel.com/lessons/3d-basic-rendering/minimal-ray-tracer-rendering-simple-shapes/ray-box-intersection
-		void boxHit(const vec3 &origin, const vec3 &ray, hitInfo &info){
-			float tmin = (box.min.x() - origin.x()) / ray.x(); 
-			float tmax = (box.max.x() - origin.x()) / ray.x(); 
- 
-			if (tmin > tmax) {
-				float tmp = tmin;
-				tmin = tmax;
-				tmax = tmp;
-			}
-	 
-			float tymin = (box.min.y() - origin.y()) / ray.y(); 
-			float tymax = (box.max.y() - origin.y()) / ray.y(); 
-	 
-			if (tymin > tymax) {
-				float tmp = tymin;
-				tymin = tymax;
-				tymax = tmp;
-			}
-	 
-			if ((tmin > tymax) || (tymin > tmax)) {
-				info.hit = false;
-				return;
-			}
-	 
-			if (tymin > tmin) 
-					tmin = tymin; 
-	 
-			if (tymax < tmax) 
-					tmax = tymax; 
-	 
-			float tzmin = (box.min.z() - origin.z()) / ray.z(); 
-			float tzmax = (box.max.z() - origin.z()) / ray.z();
-	 
-			if (tzmin > tzmax){
-				float tmp = tzmin;
-				tzmin = tzmax;
-				tzmax = tmp;
-			}
-	 
-			if ((tmin > tzmax) || (tzmin > tmax)) {
-				info.hit = false;
-				return;
-			}
-	 
-			if (tzmin > tmin) 
-					tmin = tzmin; 
-	 
-			if (tzmax < tmax) 
-					tmax = tzmax; 
-	 
-	 		info.hit = true;
-			info.t = tmin;
-		}
-
-		OCT *children[8];
-		vector<Triangle> leafTri;
-		Volume box;
-		vec3 sep;
-		bool isLeaf;
-};
 
 //maps world coordinates to sdf coordinates and returns value of sdf
 bool getValue(const SDF &sdf, const vec3 &world, SDFResult &res){
@@ -387,7 +245,7 @@ void marchSDF(const SDF &sdf, hitInfo &info){
 	vec3 p;
 	info.hit = false;
 	for (p = info.origin;getValue(sdf, p, sres);p += info.ray*abs(sres.value)){
-		if (sres.value <= sdf.resolution){ //what about <= sdf.resolution
+		if (sres.value <= sdf.resolution){ // <= sdf.resolution or <= 0 ?
 			info.hit = true;
 			info.t = (p-info.origin).length();
 			return;
@@ -395,8 +253,7 @@ void marchSDF(const SDF &sdf, hitInfo &info){
 	}
 }
 
-vec3 get_color(vec3 origin, vec3 ray, vector<Triangle> &triangles, SDF &sdf, int depth=0){
-
+vec3 get_color(vec3 origin, vec3 ray, GridMap &triangles, const SDF &sdf, int depth=0){
 	//sometimes rays get stuck inside the 3d model
 	if (depth > 40)
 		return vec3(0,0,0);
@@ -421,7 +278,9 @@ vec3 get_color(vec3 origin, vec3 ray, vector<Triangle> &triangles, SDF &sdf, int
 	double hit_distance = march.t;
 
 	if (march.hit){
-		for (Triangle tri : triangles){
+		vec3_int cell((march.origin + (march.ray * march.t)) / grid_resolution);
+		//cerr << "hit " << cell << ": "<< triangles[cell].size() << endl;
+		for (Triangle tri : triangles[cell]){
 			hitInfo check = {
 				ray,
 				origin,
@@ -489,9 +348,6 @@ vec3 get_color(vec3 origin, vec3 ray, vector<Triangle> &triangles, SDF &sdf, int
 }
 
 int main(int argc, char **argv){
-	//const unsigned int image_width = 800;
-	//const unsigned int image_height = 600;
-
 	const unsigned int image_width = 1280;
 	const unsigned int image_height = 960;
 
@@ -500,12 +356,22 @@ int main(int argc, char **argv){
 	const double cam_distance = 0.5;
 	const double aspect = (double)image_width / image_height;
 
-	cerr << "Loading obj" << endl;
+	cerr << "loading obj" << endl;
 	vector<Triangle> triangles = loadTriangles("bunny_1k.obj");
-	cerr << "Loading sdf" << endl;
+	cerr << "generating hashmap" << endl;
+
+	GridMap gridmap;
+	for (int i = 0;i < triangles.size();i++){
+		Triangle tri = triangles.at(i);
+		vec3_int gridpos(tri.p[0] / grid_resolution);
+		gridmap[gridpos].push_back(tri);
+		cerr << gridpos << endl;
+	}
+
+	cerr << "loading sdf" << endl;
 	SDF sdf;
 	loadSDF(sdf, "bunny_1k_33.sdf");
-	cerr << "Loading complete" << endl;
+	cerr << "loading complete" << endl;
 
 	auto global_start = std::chrono::system_clock::now();
 	for (double angle_loop = 0;angle_loop < 360;angle_loop += angle){
@@ -543,7 +409,7 @@ int main(int argc, char **argv){
 						0
 					);
 					ray = rotateY(ray, angle_loop);
-					average += get_color(camera_origin, ray, triangles, sdf);
+					average += get_color(camera_origin, ray, gridmap, sdf);
 				}
 				average /= aliasing_iters;
 				image[y*image_width + x] = average;

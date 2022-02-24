@@ -61,6 +61,36 @@ class vec3 {
 		double e[3];
 };
 
+class vec3_int{
+	public:
+		vec3_int(int x, int y, int z): x(x), y(y), z(z){};
+		vec3_int(vec3 point){
+			this->x = (int)round(point[0]);
+			this->y = (int)round(point[1]);
+			this->z = (int)round(point[2]);
+		}
+		int x,y,z;
+};
+
+struct hashFunc{
+	size_t operator()(const vec3_int &k) const{
+		size_t h1 = std::hash<int>()(k.x);
+		size_t h2 = std::hash<int>()(k.y);
+		size_t h3 = std::hash<int>()(k.z);
+		return (h1 ^ (h2 << 1)) ^ h3;
+	}
+};
+
+struct equalsFunc{
+	bool operator()( const vec3_int& lhs, const vec3_int& rhs ) const{
+		return (lhs.x == rhs.x) && (lhs.y == rhs.y) && (lhs.z == rhs.z);
+	}
+};
+
+inline std::ostream& operator<<(std::ostream &out, const vec3_int &v) {
+	return out << v.x << ' ' << v.y << ' ' << v.z;
+}
+
 // Type aliases for vec3
 using point3 = vec3;   // 3D point
 using color = vec3;	// RGB color
