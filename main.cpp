@@ -14,7 +14,7 @@
 
 using namespace std;
 
-const double grid_resolution = 0.03;//cell size
+const double grid_resolution = 0.06;//cell size
 
 typedef struct Triangle{
 	vec3 p[3];
@@ -245,7 +245,7 @@ void marchSDF(const SDF &sdf, hitInfo &info){
 	vec3 p;
 	info.hit = false;
 	for (p = info.origin;getValue(sdf, p, sres);p += info.ray*abs(sres.value)){
-		if (sres.value <= sdf.resolution){ // <= sdf.resolution or <= 0 ?
+		if (sres.value <= 0){ // <= sdf.resolution or <= 0 ?
 			info.hit = true;
 			info.t = (p-info.origin).length();
 			return;
@@ -363,9 +363,15 @@ int main(int argc, char **argv){
 	GridMap gridmap;
 	for (int i = 0;i < triangles.size();i++){
 		Triangle tri = triangles.at(i);
-		vec3_int gridpos(tri.p[0] / grid_resolution);
-		gridmap[gridpos].push_back(tri);
-		cerr << gridpos << endl;
+		//TODO this is not sufficient, need to implement a proper triangle - box intersection test
+		set<vec3_int> points{
+			vec3_int(tri.p[0] / grid_resolution),
+			vec3_int(tri.p[1] / grid_resolution),
+			vec3_int(tri.p[2] / grid_resolution),
+			vec3_int(((tri.p[0] + tri.p[1] + tri.p[2]) / 3.0) / grid_resolution)
+		};
+		for (set<vec3_int>::iterator it = points.begin();it != points.end();++it)
+			gridmap[*it].push_back(tri);
 	}
 
 	cerr << "loading sdf" << endl;

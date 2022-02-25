@@ -63,13 +63,18 @@ class vec3 {
 
 class vec3_int{
 	public:
+		int x,y,z;
+
 		vec3_int(int x, int y, int z): x(x), y(y), z(z){};
 		vec3_int(vec3 point){
 			this->x = (int)round(point[0]);
 			this->y = (int)round(point[1]);
 			this->z = (int)round(point[2]);
 		}
-		int x,y,z;
+
+		bool operator< (const vec3_int &point) const{
+			return this->x < point.x;
+		}
 };
 
 struct hashFunc{
