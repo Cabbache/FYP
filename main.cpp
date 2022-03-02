@@ -14,7 +14,7 @@
 
 using namespace std;
 
-const double grid_resolution = 0.2;//cell size
+const double grid_resolution = 0.03;//cell size
 double total_marchtime = 0;
 
 typedef struct Triangle{
@@ -298,10 +298,10 @@ vec3 get_color(vec3 origin, vec3 ray, GridMap &triangles, const SDF &sdf, int de
 		//vec3_int cell((march.origin + (march.ray * march.t)) / grid_resolution);
 		//cerr << "hit " << cell << ": "<< triangles[cell].size() << endl;
 		//for (Triangle tri : triangles[cell]){
-		const int thing = 0;
-		for (int a = -thing;a <= thing;a++)
-		for (int b = -thing;b <= thing;b++)
-		for (int c = -thing;c <= thing;c++){
+		const int cubelength = 1;
+		for (int a = -cubelength;a <= cubelength;a++)
+		for (int b = -cubelength;b <= cubelength;b++)
+		for (int c = -cubelength;c <= cubelength;c++){
 			vec3_int nearby(center.x+a, center.y+b, center.z+c);
 			if (triangles.count(nearby) != 1)
 				continue;
@@ -384,13 +384,16 @@ int main(int argc, char **argv){
 	const double aspect = (double)image_width / image_height;
 
 	cerr << "loading obj" << endl;
-	vector<Triangle> triangles = loadTriangles("bunny_1k.obj");
+	vector<Triangle> triangles = loadTriangles("bunny.obj");
 	cerr << "generating hashmap" << endl;
 
 	GridMap gridmap;
 	for (int i = 0;i < triangles.size();i++){
 		Triangle tri = triangles.at(i);
 
+//#define __correct_fill__
+
+#ifdef __correct_fill__
 //          This assures correct filling of cells
 		set<vec3_int> points;
 		double a_res = 0.5 * grid_resolution / tri.p[0].length();
@@ -414,15 +417,17 @@ int main(int argc, char **argv){
 					gridmap[*it].push_back(tri);
 			}
 		}
+#endif
+#ifndef __correct_fill__
+		set<vec3_int> points{
+			vec3_int(tri.p[0] / grid_resolution),
+			vec3_int(tri.p[1] / grid_resolution),
+			vec3_int(tri.p[2] / grid_resolution),
+		};
 
-//		set<vec3_int> points{
-//			vec3_int(tri.p[0] / grid_resolution),
-//			vec3_int(tri.p[1] / grid_resolution),
-//			vec3_int(tri.p[2] / grid_resolution),
-//		};
-
-//		for (set<vec3_int>::iterator it = points.begin();it != points.end();++it)
-//			gridmap[*it].push_back(tri);
+		for (set<vec3_int>::iterator it = points.begin();it != points.end();++it)
+			gridmap[*it].push_back(tri);
+#endif
 	}
 
 	cerr << "loading sdf" << endl;
