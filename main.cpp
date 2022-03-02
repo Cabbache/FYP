@@ -14,7 +14,8 @@
 
 using namespace std;
 
-const double grid_resolution = 0.06;//cell size
+const double grid_resolution = 0.2;//cell size
+double total_marchtime = 0;
 
 typedef struct Triangle{
 	vec3 p[3];
@@ -58,16 +59,16 @@ typedef struct SDFResult{
 //maps world coordinates to sdf coordinates and returns value of sdf
 bool getValue(const SDF &sdf, const vec3 &world, SDFResult &res){
 	if(
-		world.x() < sdf.origin.x() || world.x() > sdf.corner.x() ||
-		world.y() < sdf.origin.y() || world.y() > sdf.corner.y() ||
-		world.z() < sdf.origin.z() || world.z() > sdf.corner.z()
+		world.x() < sdf.origin.x() || world.x() >= sdf.corner.x() - sdf.resolution/2 ||
+		world.y() < sdf.origin.y() || world.y() >= sdf.corner.y() - sdf.resolution/2 ||
+		world.z() < sdf.origin.z() || world.z() >= sdf.corner.z() - sdf.resolution/2
 	){
 		return res.inside = false;
 	}
 	res.inside = true;
 	vec3 distance = world - sdf.origin;
 	distance /= sdf.resolution;
-	res.value = sdf.values[(int)distance[0]][(int)distance[1]][(int)distance[2]];
+	res.value = sdf.values[(int)round(distance[0])][(int)round(distance[1])][(int)round(distance[2])];
 	return true;
 }
 
@@ -245,7 +246,7 @@ void marchSDF(const SDF &sdf, hitInfo &info){
 	vec3 p;
 	info.hit = false;
 	for (p = info.origin;getValue(sdf, p, sres);p += info.ray*abs(sres.value)){
-		if (sres.value <= 0){ // <= sdf.resolution or <= 0 ?
+		if (sres.value <= sdf.resolution/2.0){ // <= sdf.resolution or <= 0 ?
 			info.hit = true;
 			info.t = (p-info.origin).length();
 			return;
@@ -274,40 +275,65 @@ vec3 get_color(vec3 origin, vec3 ray, GridMap &triangles, const SDF &sdf, int de
 		false,
 		0,
 	};
+
+	auto start = std::chrono::system_clock::now();
 	marchSDF(sdf, march);
+	auto end = std::chrono::system_clock::now();
+	std::chrono::duration<double> elapsed_seconds = end-start;
+	total_marchtime += elapsed_seconds.count();
+
 	double hit_distance = march.t;
 
 	if (march.hit){
-		vec3_int cell((march.origin + (march.ray * march.t)) / grid_resolution);
+		vec3_int center((march.origin + (march.ray * march.t)) / grid_resolution);
+		//vector<Triangle> tris;
+		//for (int a = -1;a <= 1;a++)
+		//for (int b = -1;b <= 1;b++)
+		//for (int c = -1;c <= 1;c++){
+			//vec3_int nearby(center.x+a, center.y+b, center.z+c);
+			//if (triangles.count(nearby) == 1)
+			//	tris.insert(tris.end(), triangles.at(nearby).begin(), triangles.at(nearby).end());
+		//}
+		//cerr << tris.size() << endl;
+		//vec3_int cell((march.origin + (march.ray * march.t)) / grid_resolution);
 		//cerr << "hit " << cell << ": "<< triangles[cell].size() << endl;
-		for (Triangle tri : triangles[cell]){
-			hitInfo check = {
-				ray,
-				origin,
-				false,
-				0.0f
-			};
-			triHit(tri, check);
-			if (!check.hit)
+		//for (Triangle tri : triangles[cell]){
+		const int thing = 0;
+		for (int a = -thing;a <= thing;a++)
+		for (int b = -thing;b <= thing;b++)
+		for (int c = -thing;c <= thing;c++){
+			vec3_int nearby(center.x+a, center.y+b, center.z+c);
+			if (triangles.count(nearby) != 1)
 				continue;
-			
-			if (closest.t < check.t)
-				continue;
-			closest = check;
-			closestTri = tri;
+			for (Triangle tri : triangles.at(nearby)){
+				hitInfo check = {
+					ray,
+					origin,
+					false,
+					0.0f
+				};
+				triHit(tri, check);
+				if (!check.hit)
+					continue;
+				
+				if (closest.t < check.t)
+					continue;
+				closest = check;
+				closestTri = tri;
 
-			//exit if triangle hit is closest to camera as predicted by sdf (+- resolution range may need adjustment)
-			double travelled = (ray*check.t).length();
-			if (
-				travelled >= hit_distance - sdf.resolution &&
-				travelled <= hit_distance + sdf.resolution
-			) {
-				break;
+				//exit if triangle hit is closest to camera as predicted by sdf (+- resolution range may need adjustment)
+				double travelled = (ray*check.t).length();
+				if (
+					travelled >= hit_distance - sdf.resolution &&
+					travelled <= hit_distance + sdf.resolution
+				) {
+					break;
+				}
 			}
 		}
 	}
 
-	//if no triangles hit color the background
+	//if no triangles hit3color the background
 	if (!closest.hit){
 		vec3 pp = 127*(unit_vector(ray)+vec3(1,1,1));
 		return vec3((int)pp[1], (int)pp[2], (int)pp[0]);
@@ -353,7 +379,8 @@ int main(int argc, char **argv){
 
 	const unsigned int aliasing_iters = 2;
 	const double angle = 1.0;
-	const double cam_distance = 0.5;
+	const double cam_distance = 0.5; //only for small sdf
+	//const double cam_distance = 0.3;
 	const double aspect = (double)image_width / image_height;
 
 	cerr << "loading obj" << endl;
@@ -363,15 +390,39 @@ int main(int argc, char **argv){
 	GridMap gridmap;
 	for (int i = 0;i < triangles.size();i++){
 		Triangle tri = triangles.at(i);
-		//TODO this is not sufficient, need to implement a proper triangle - box intersection test
-		set<vec3_int> points{
-			vec3_int(tri.p[0] / grid_resolution),
-			vec3_int(tri.p[1] / grid_resolution),
-			vec3_int(tri.p[2] / grid_resolution),
-			vec3_int(((tri.p[0] + tri.p[1] + tri.p[2]) / 3.0) / grid_resolution)
-		};
-		for (set<vec3_int>::iterator it = points.begin();it != points.end();++it)
-			gridmap[*it].push_back(tri);
+
+//          This assures correct filling of cells
+		set<vec3_int> points;
+		double a_res = 0.5 * grid_resolution / tri.p[0].length();
+		double b_res = 0.5 * grid_resolution / tri.p[1].length();
+		for (double a = 0;a < 1.0;a+=a_res){
+			for (double b = 0;b < 1.0-a;b+=b_res){
+				a = min(1.0, a);
+				b = min(1.0-a, b);
+				double c = 1.0 - a - b;
+
+				vec3_int point(
+						(
+							a*tri.p[0] +
+							b*tri.p[1] +
+							c*tri.p[2]
+						) / grid_resolution
+					);
+				points.insert(point);
+				cerr << points.size() << endl;
+				for (set<vec3_int>::iterator it = points.begin();it != points.end();++it)
+					gridmap[*it].push_back(tri);
+			}
+		}
+
+//		set<vec3_int> points{
+//			vec3_int(tri.p[0] / grid_resolution),
+//			vec3_int(tri.p[1] / grid_resolution),
+//			vec3_int(tri.p[2] / grid_resolution),
+//		};
+
+//		for (set<vec3_int>::iterator it = points.begin();it != points.end();++it)
+//			gridmap[*it].push_back(tri);
 	}
 
 	cerr << "loading sdf" << endl;
@@ -424,6 +475,8 @@ int main(int argc, char **argv){
 		auto end = std::chrono::system_clock::now();
 		std::chrono::duration<double> elapsed_seconds = end-start;
 		cerr << "duration: " << elapsed_seconds.count() << endl;
+		cerr << "march time: " << (100.0 * total_marchtime / elapsed_seconds.count()) << "%" << endl;
+		total_marchtime = 0.0;
 
 		cerr << "Writing image to file" << endl;
 

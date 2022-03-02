@@ -12,7 +12,7 @@ function conversion(){
 set -e
 
 #compile
-g++ main.cpp vec3.h tiny_obj_loader.h -march=native -fopenmp -Ofast -o main
+./compile.sh
 
 #allow bigger stack size, otherwise there will be segfault
 ulimit -s unlimited
