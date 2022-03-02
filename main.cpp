@@ -14,20 +14,9 @@
 
 using namespace std;
 
-const double grid_resolution = 0.03;//cell size
+const double grid_resolution = 0.02;//cell size
 double total_marchtime = 0;
 
-typedef struct Triangle{
-	vec3 p[3];
-	bool reflective;
-} Triangle;
-
-typedef struct Volume{
-	vec3 min;
-	vec3 max;
-} Volume;
-
-//triangles only
 typedef struct hitInfo{
 	vec3 ray;
 	vec3 origin;
@@ -39,6 +28,18 @@ typedef struct hitInfo{
 	double gamma;
 } hitInfo;
 
+typedef struct Triangle{
+	vec3 p[3];
+	bool reflective;
+} Triangle;
+
+typedef unordered_map<vec3_int, vector<Triangle>, hashFunc, equalsFunc> GridMap;
+
+typedef struct Volume{
+	vec3 min;
+	vec3 max;
+} Volume;
+
 typedef struct SDF{
 	vec3 origin;
 	vec3 corner;
@@ -47,7 +48,12 @@ typedef struct SDF{
 	double ***values;
 } SDF;
 
-typedef unordered_map<vec3_int, vector<Triangle>, hashFunc, equalsFunc> GridMap;
+typedef struct Obj{
+	vector<Triangle> triangles;
+	Volume bounds;
+	SDF sdf;
+	GridMap gridmap;
+} Obj;
 
 //used for the function that returns sdf value given world coordinate
 //if world coordinate is outside sdf domain, inside = false
@@ -125,10 +131,8 @@ void loadSDF(SDF &sdf, string filename){
 	}
 }
 
-//loads triangles from obj file
-vector<Triangle> loadTriangles(string inputfile){
-	vector<Triangle> triangles;
-
+//loads triangles from obj file into triangles
+void loadTriangles(string inputfile, vector<Triangle> &triangles){
 	tinyobj::attrib_t attrib;
 	std::vector<tinyobj::shape_t> shapes;
 	std::vector<tinyobj::material_t> materials;
@@ -196,8 +200,6 @@ vector<Triangle> loadTriangles(string inputfile){
 			shapes[s].mesh.material_ids[f];
 		}
 	}
-
-	return triangles;
 }
 
 double drand(){
@@ -254,7 +256,61 @@ void marchSDF(const SDF &sdf, hitInfo &info){
 	}
 }
 
-vec3 get_color(vec3 origin, vec3 ray, GridMap &triangles, const SDF &sdf, int depth=0){
+void boxHit(hitInfo &info, const Volume &box){
+	float tmin = (box.min.x() - info.origin.x()) / info.ray.x(); 
+	float tmax = (box.max.x() - info.origin.x()) / info.ray.x(); 
+
+	if (tmin > tmax) {
+		float tmp = tmin;
+		tmin = tmax;
+		tmax = tmp;
+	}
+
+	float tymin = (box.min.y() - info.origin.y()) / info.ray.y(); 
+	float tymax = (box.max.y() - info.origin.y()) / info.ray.y(); 
+
+	if (tymin > tymax) {
+		float tmp = tymin;
+		tymin = tymax;
+		tymax = tmp;
+	}
+
+	if ((tmin > tymax) || (tymin > tmax)) {
+		info.hit = false;
+		return;
+	}
+
+	if (tymin > tmin) 
+		tmin = tymin; 
+
+	if (tymax < tmax) 
+		tmax = tymax; 
+
+	float tzmin = (box.min.z() - info.origin.z()) / info.ray.z(); 
+	float tzmax = (box.max.z() - info.origin.z()) / info.ray.z();
+
+	if (tzmin > tzmax){
+		float tmp = tzmin;
+		tzmin = tzmax;
+		tzmax = tmp;
+	}
+
+	if ((tmin > tzmax) || (tzmin > tmax)) {
+		info.hit = false;
+		return;
+	}
+
+	if (tzmin > tmin) 
+		tmin = tzmin; 
+
+	if (tzmax < tmax) 
+		tmax = tzmax; 
+
+	info.hit = true;
+	info.t = tmin;
+}
+
+vec3 get_color(vec3 origin, vec3 ray, const Obj &obj, int depth=0){
 	//sometimes rays get stuck inside the 3d model
 	if (depth > 40)
 		return vec3(0,0,0);
@@ -267,67 +323,76 @@ vec3 get_color(vec3 origin, vec3 ray, GridMap &triangles, const SDF &sdf, int de
 		false,
 		std::numeric_limits<float>::max(),
 	};
-
-	//check if sdf on ray contains negative value
-	hitInfo march = {
+	
+	hitInfo boxintersect = {
 		ray,
 		origin,
 		false,
 		0,
 	};
+	boxHit(boxintersect, obj.bounds);
 
-	auto start = std::chrono::system_clock::now();
-	marchSDF(sdf, march);
-	auto end = std::chrono::system_clock::now();
-	std::chrono::duration<double> elapsed_seconds = end-start;
-	total_marchtime += elapsed_seconds.count();
+	if (boxintersect.hit){
+		hitInfo march = {
+			ray,
+			origin + (boxintersect.t * ray),
+			false,
+			0,
+		};
 
-	double hit_distance = march.t;
+		auto start = std::chrono::system_clock::now();
+		marchSDF(obj.sdf, march);
+		auto end = std::chrono::system_clock::now();
+		std::chrono::duration<double> elapsed_seconds = end-start;
+		total_marchtime += elapsed_seconds.count();
 
-	if (march.hit){
-		vec3_int center((march.origin + (march.ray * march.t)) / grid_resolution);
-		//vector<Triangle> tris;
-		//for (int a = -1;a <= 1;a++)
-		//for (int b = -1;b <= 1;b++)
-		//for (int c = -1;c <= 1;c++){
-			//vec3_int nearby(center.x+a, center.y+b, center.z+c);
-			//if (triangles.count(nearby) == 1)
-			//	tris.insert(tris.end(), triangles.at(nearby).begin(), triangles.at(nearby).end());
-		//}
-		//cerr << tris.size() << endl;
-		//vec3_int cell((march.origin + (march.ray * march.t)) / grid_resolution);
-		//cerr << "hit " << cell << ": "<< triangles[cell].size() << endl;
-		//for (Triangle tri : triangles[cell]){
-		const int cubelength = 1;
-		for (int a = -cubelength;a <= cubelength;a++)
-		for (int b = -cubelength;b <= cubelength;b++)
-		for (int c = -cubelength;c <= cubelength;c++){
-			vec3_int nearby(center.x+a, center.y+b, center.z+c);
-			if (triangles.count(nearby) != 1)
-				continue;
-			for (Triangle tri : triangles.at(nearby)){
-				hitInfo check = {
-					ray,
-					origin,
-					false,
-					0.0f
-				};
-				triHit(tri, check);
-				if (!check.hit)
+		double hit_distance = march.t;
+
+		if (march.hit){
+			vec3_int center((march.origin + (march.ray * march.t)) / grid_resolution);
+			//vector<Triangle> tris;
+			//for (int a = -1;a <= 1;a++)
+			//for (int b = -1;b <= 1;b++)
+			//for (int c = -1;c <= 1;c++){
+				//vec3_int nearby(center.x+a, center.y+b, center.z+c);
+				//if (triangles.count(nearby) == 1)
+				//	tris.insert(tris.end(), triangles.at(nearby).begin(), triangles.at(nearby).end());
+			//}
+			//cerr << tris.size() << endl;
+			//vec3_int cell((march.origin + (march.ray * march.t)) / grid_resolution);
+			//cerr << "hit " << cell << ": "<< triangles[cell].size() << endl;
+			//for (Triangle tri : triangles[cell]) (open curly)
+			const int cubelength = 1;
+			for (int a = -cubelength;a <= cubelength;a++)
+			for (int b = -cubelength;b <= cubelength;b++)
+			for (int c = -cubelength;c <= cubelength;c++){
+				vec3_int nearby(center.x+a, center.y+b, center.z+c);
+				if (obj.gridmap.count(nearby) != 1)
 					continue;
-				
-				if (closest.t < check.t)
-					continue;
-				closest = check;
-				closestTri = tri;
+				for (Triangle tri : obj.gridmap.at(nearby)){
+					hitInfo check = {
+						ray,
+						origin,
+						false,
+						0.0f
+					};
+					triHit(tri, check);
+					if (!check.hit)
+						continue;
+					
+					if (closest.t < check.t)
+						continue;
+					closest = check;
+					closestTri = tri;
 
-				//exit if triangle hit is closest to camera as predicted by sdf (+- resolution range may need adjustment)
-				double travelled = (ray*check.t).length();
-				if (
-					travelled >= hit_distance - sdf.resolution &&
-					travelled <= hit_distance + sdf.resolution
-				) {
-					break;
+					//exit if triangle hit is closest to camera as predicted by sdf (+- resolution range may need adjustment)
+					double travelled = (ray*check.t).length();
+					if (
+						travelled >= hit_distance - obj.sdf.resolution &&
+						travelled <= hit_distance + obj.sdf.resolution
+					) {
+						break;
+					}
 				}
 			}
 		}
@@ -355,7 +420,7 @@ vec3 get_color(vec3 origin, vec3 ray, GridMap &triangles, const SDF &sdf, int de
 		//vec3 deflect = unit_vector(vec3(drand()-0.5, drand()-0.5, drand()-0.5));
 		//reflected += deflect / 20;
 
-		return get_color(hitpoint, reflected, triangles, sdf, ++depth);
+		return get_color(hitpoint, reflected, obj, ++depth);
 	}
 
 	//if hit border of non mirror triangle, make border black
@@ -373,23 +438,46 @@ vec3 get_color(vec3 origin, vec3 ray, GridMap &triangles, const SDF &sdf, int de
 	return color;
 }
 
+Volume getBoundingVolume(const vector<Triangle> &triangles){
+	vec3 min(
+		std::numeric_limits<double>::max(),
+		std::numeric_limits<double>::max(),
+		std::numeric_limits<double>::max()
+	);
+	vec3 max(
+		std::numeric_limits<double>::min(),
+		std::numeric_limits<double>::min(),
+		std::numeric_limits<double>::min()
+	);
+	for (Triangle tri : triangles){
+		for (int i = 0;i < 3;i++)
+		for (int j = 0;j < 3;j++){
+			min.e[j] = std::min(min.e[j], tri.p[i].e[j]);
+			max.e[j] = std::max(max.e[j], tri.p[i].e[j]);
+		}
+	}
+	return Volume{min, max};
+}
+
 int main(int argc, char **argv){
 	const unsigned int image_width = 1280;
 	const unsigned int image_height = 960;
 
 	const unsigned int aliasing_iters = 2;
 	const double angle = 1.0;
-	const double cam_distance = 0.5; //only for small sdf
-	//const double cam_distance = 0.3;
+	const double cam_distance = 0.5;
 	const double aspect = (double)image_width / image_height;
 
 	cerr << "loading obj" << endl;
-	vector<Triangle> triangles = loadTriangles("bunny.obj");
+
+	Obj bunny;
+	loadTriangles("bunny.obj", bunny.triangles);
+	bunny.bounds = getBoundingVolume(bunny.triangles);
+	cout << bunny.bounds.min << ", " << bunny.bounds.max << endl;
 	cerr << "generating hashmap" << endl;
 
-	GridMap gridmap;
-	for (int i = 0;i < triangles.size();i++){
-		Triangle tri = triangles.at(i);
+	for (int i = 0;i < bunny.triangles.size();i++){
+		Triangle tri = bunny.triangles.at(i);
 
 //#define __correct_fill__
 
@@ -414,7 +502,7 @@ int main(int argc, char **argv){
 				points.insert(point);
 				cerr << points.size() << endl;
 				for (set<vec3_int>::iterator it = points.begin();it != points.end();++it)
-					gridmap[*it].push_back(tri);
+					bunny.gridmap[*it].push_back(tri);
 			}
 		}
 #endif
@@ -426,16 +514,15 @@ int main(int argc, char **argv){
 		};
 
 		for (set<vec3_int>::iterator it = points.begin();it != points.end();++it)
-			gridmap[*it].push_back(tri);
+			bunny.gridmap[*it].push_back(tri);
 #endif
 	}
 
 	cerr << "loading sdf" << endl;
-	SDF sdf;
-	loadSDF(sdf, "bunny_1k_33.sdf");
+	loadSDF(bunny.sdf, "bunny.sdf");
 	cerr << "loading complete" << endl;
 
-	auto global_start = std::chrono::system_clock::now();
+	double total_duration = 0;
 	for (double angle_loop = 0;angle_loop < 360;angle_loop += angle){
 		ofstream ppm("img_"+to_string(int(angle_loop))+".ppm");
 
@@ -449,7 +536,7 @@ int main(int argc, char **argv){
 		double frame_height = frame_width / aspect;
 		double eye_frame_distance = 1; //or focal length?
 
-		vec3 camera_origin = vec3(0,0.23,-cam_distance);
+		vec3 camera_origin = vec3(0,0.5*(bunny.bounds.max.y() + bunny.bounds.min.y()),-cam_distance);
 		camera_origin = rotateY(camera_origin, angle_loop);
 
 		vec3 frame_topleft = vec3(-frame_width/2, frame_height/2, eye_frame_distance);
@@ -471,7 +558,7 @@ int main(int argc, char **argv){
 						0
 					);
 					ray = rotateY(ray, angle_loop);
-					average += get_color(camera_origin, ray, gridmap, sdf);
+					average += get_color(camera_origin, ray, bunny);
 				}
 				average /= aliasing_iters;
 				image[y*image_width + x] = average;
@@ -480,6 +567,7 @@ int main(int argc, char **argv){
 		auto end = std::chrono::system_clock::now();
 		std::chrono::duration<double> elapsed_seconds = end-start;
 		cerr << "duration: " << elapsed_seconds.count() << endl;
+		total_duration += elapsed_seconds.count();
 		cerr << "march time: " << (100.0 * total_marchtime / elapsed_seconds.count()) << "%" << endl;
 		total_marchtime = 0.0;
 
@@ -491,8 +579,6 @@ int main(int argc, char **argv){
 		}
 		ppm.close();
 	}
-	auto global_end = std::chrono::system_clock::now();
-	std::chrono::duration<double> global_elapsed = global_end - global_start;
-	cerr << "total duration: " << global_elapsed.count() << endl;
+	cerr << "total duration: " << total_duration << endl;
 	return 0;
 }
