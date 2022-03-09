@@ -3,8 +3,17 @@
 
 #include <cmath>
 #include <iostream>
+#include <vector>
+#include <unordered_map>
+#include <iostream>
+#include <fstream>
+#include <sstream>
+#include <chrono>
+#include <set>
+#include <limits>
+#include <unordered_set>
 
-using std::sqrt;
+using namespace std;
 
 class vec3 {
 	public:
@@ -14,6 +23,10 @@ class vec3 {
 		double x() const { return e[0]; }
 		double y() const { return e[1]; }
 		double z() const { return e[2]; }
+
+		void setX(double x){ e[0] = x; }
+		void setY(double y){ e[1] = y; }
+		void setZ(double z){ e[2] = z; }
 
 		vec3 operator-() const { return vec3(-e[0], -e[1], -e[2]); }
 		double operator[](int i) const { return e[i]; }
@@ -157,5 +170,67 @@ inline vec3 rotateY(vec3 v, double degrees){
 		-v.e[0] * sin(radians) + v.e[2] * cos(radians)
 	);
 }
+
+typedef struct Volume{
+	vec3 min;
+	vec3 max;
+} Volume;
+
+typedef struct Triangle{
+	vec3 p[3];
+	bool reflective;
+
+	bool operator==(const Triangle& triangle) const{
+		return p[0] == triangle.p[0] && p[1] == triangle.p[1] && p[2] == triangle.p[2];
+	}
+
+	struct HashFunction{
+		size_t operator()(const Triangle& triangle) const
+    {
+			hashFuncVec hfv;
+			return hfv(triangle.p[0]) ^ hfv(triangle.p[1]) ^ hfv(triangle.p[2]);
+    }
+	};
+
+} Triangle;
+
+typedef struct hitInfo{
+	vec3 ray;
+	vec3 origin;
+
+	bool hit;
+	double t;
+
+	double beta;
+	double gamma;
+
+	Triangle tri;
+} hitInfo;
+
+typedef unordered_map<vec3_int, unordered_set<Triangle, Triangle::HashFunction>, hashFuncVec, equalsFunc> GridMap;
+
+typedef struct SDF{
+	vec3 origin;
+	vec3 corner;
+	vec3 dimensions;
+	double resolution;
+	double ***values;
+} SDF;
+
+typedef struct Obj{
+	vec3 *verts;
+	vec3 *faces;
+	int numVerts;
+	int numFaces;
+	Volume bounds;
+	SDF sdf;
+} Obj;
+
+//used for the function that returns sdf value given world coordinate
+//if world coordinate is outside sdf domain, inside = false
+typedef struct SDFResult{
+	bool inside;
+	double value;
+} SDFResult;
 
 #endif
