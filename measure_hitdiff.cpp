@@ -19,6 +19,9 @@ double total_marchtime = 0;
 //const double sres_to_gres = 1.8;
 const double sres_to_gres = 10;
 
+unsigned int cc = 0;
+double total_err = 0;
+
 typedef struct hitInfo{
 	vec3 ray;
 	vec3 origin;
@@ -350,6 +353,7 @@ vec3 get_color(vec3 origin, vec3 ray, const Obj &obj, int depth=0){
 	};
 	boxHit(boxintersect, obj.bounds);
 
+	vec3 marchHit(0,0,0);
 	if (boxintersect.hit){
 		hitInfo march = {
 			ray,
@@ -365,6 +369,7 @@ vec3 get_color(vec3 origin, vec3 ray, const Obj &obj, int depth=0){
 		total_marchtime += elapsed_seconds.count();
 
 		if (march.hit){
+			marchHit = march.origin + (march.ray * march.t);
 			vec3_int center((march.origin + (march.ray * march.t)) / obj.grid.resolution);
 			const int cubelength = 0;
 			for (int a = -cubelength;a <= cubelength;a++)
@@ -401,6 +406,9 @@ vec3 get_color(vec3 origin, vec3 ray, const Obj &obj, int depth=0){
 
 	vec3 hitpoint = origin + (ray * closest.t);
 
+	total_err += 100 * ((hitpoint - marchHit).length() / obj.grid.resolution);
+	cc++;
+	
 	//if triangle is mirror
 	if (closestTri.reflective){
 		vec3 normal = unit_vector(
@@ -567,6 +575,9 @@ int main(int argc, char **argv){
 		cerr << "duration: " << elapsed_seconds.count() << endl;
 		total_duration += elapsed_seconds.count();
 		cerr << "march time: " << (100.0 * total_marchtime / elapsed_seconds.count()) << "%" << endl;
+		cerr << "diff: " << total_err / cc << endl;
+		total_err = 0;
+		cc = 0;
 		total_marchtime = 0.0;
 
 		cerr << "Writing image to file" << endl;
