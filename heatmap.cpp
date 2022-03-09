@@ -350,6 +350,7 @@ vec3 get_color(vec3 origin, vec3 ray, const Obj &obj, int depth=0){
 	};
 	boxHit(boxintersect, obj.bounds);
 
+	int count = 0;
 	if (boxintersect.hit){
 		hitInfo march = {
 			ray,
@@ -387,6 +388,7 @@ vec3 get_color(vec3 origin, vec3 ray, const Obj &obj, int depth=0){
 				vec3_int nearby(center.x+a, center.y+b, center.z+c);
 				if (obj.grid.map.count(nearby) != 1)
 					continue;
+				count = obj.grid.map.at(center).size();
 				for (Triangle tri : obj.grid.map.at(nearby)){
 					hitInfo check = {
 						ray,
@@ -446,13 +448,11 @@ vec3 get_color(vec3 origin, vec3 ray, const Obj &obj, int depth=0){
 		return vec3(0,0,0);
 	
 	//color the non mirror triangle
-	vec3 color = unit_vector(
-		vec3(
-			(hitpoint - closestTri.p[0]).length(),
-			(hitpoint - closestTri.p[1]).length(),
-			(hitpoint - closestTri.p[2]).length()
-		)
-	)*255;
+	vec3 color(
+		min(255. * count / 300, 255.),
+		min(255. * count / 300, 255.),
+		min(255. * count / 300, 255.)
+	);
 	return color;
 }
 
