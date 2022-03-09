@@ -15,8 +15,8 @@
 
 using namespace std;
 
-const double grid_resolution = 0.02;//cell size
 double total_marchtime = 0;
+const double sres_to_gres = 2.3;
 
 typedef struct hitInfo{
 	vec3 ray;
@@ -66,7 +66,10 @@ typedef struct Obj{
 	vector<Triangle> triangles;
 	Volume bounds;
 	SDF sdf;
-	GridMap gridmap;
+	struct {
+		double resolution;
+		GridMap map;
+	} grid;
 } Obj;
 
 //used for the function that returns sdf value given world coordinate
@@ -363,7 +366,7 @@ vec3 get_color(vec3 origin, vec3 ray, const Obj &obj, int depth=0){
 		double hit_distance = march.t;
 
 		if (march.hit){
-			vec3_int center((march.origin + (march.ray * march.t)) / grid_resolution);
+			vec3_int center((march.origin + (march.ray * march.t)) / obj.grid.resolution);
 			//vector<Triangle> tris;
 			//for (int a = -1;a <= 1;a++)
 			//for (int b = -1;b <= 1;b++)
@@ -373,7 +376,7 @@ vec3 get_color(vec3 origin, vec3 ray, const Obj &obj, int depth=0){
 				//	tris.insert(tris.end(), triangles.at(nearby).begin(), triangles.at(nearby).end());
 			//}
 			//cerr << tris.size() << endl;
-			//vec3_int cell((march.origin + (march.ray * march.t)) / grid_resolution);
+			//vec3_int cell((march.origin + (march.ray * march.t)) / obj.grid.resolution);
 			//cerr << "hit " << cell << ": "<< triangles[cell].size() << endl;
 			//for (Triangle tri : triangles[cell]) (open curly)
 			const int cubelength = 1;
@@ -381,9 +384,9 @@ vec3 get_color(vec3 origin, vec3 ray, const Obj &obj, int depth=0){
 			for (int b = -cubelength;b <= cubelength;b++)
 			for (int c = -cubelength;c <= cubelength;c++){
 				vec3_int nearby(center.x+a, center.y+b, center.z+c);
-				if (obj.gridmap.count(nearby) != 1)
+				if (obj.grid.map.count(nearby) != 1)
 					continue;
-				for (Triangle tri : obj.gridmap.at(nearby)){
+				for (Triangle tri : obj.grid.map.at(nearby)){
 					hitInfo check = {
 						ray,
 						origin,
@@ -479,27 +482,36 @@ int main(int argc, char **argv){
 
 	const unsigned int aliasing_iters = 2;
 	const double angle = 1.0;
-	const double cam_distance = 0.5;
+	//const double cam_distance = 0.5;
 	const double aspect = (double)image_width / image_height;
 
 	cerr << "loading obj" << endl;
+	Obj object;
+	loadTriangles("object.obj", object.triangles);
+	object.bounds = getBoundingVolume(object.triangles);
+	cout << object.bounds.min << ", " << object.bounds.max << endl;
+	const double cam_distance = max(
+		max(
+			object.bounds.min.x(),
+			object.bounds.min.z()
+		),
+		max(
+			object.bounds.max.x(),
+			object.bounds.max.z()
+		)
+	) * 4;
 
-	Obj bunny;
-	loadTriangles("bunny.obj", bunny.triangles);
-	bunny.bounds = getBoundingVolume(bunny.triangles);
-	cout << bunny.bounds.min << ", " << bunny.bounds.max << endl;
+	cerr << "loading sdf" << endl;
+	loadSDF(object.sdf, "object.sdf");
+
 	cerr << "generating hashmap" << endl;
-
-	for (int i = 0;i < bunny.triangles.size();i++){
-		Triangle tri = bunny.triangles.at(i);
-
-#define __correct_fill__
-
-#ifdef __correct_fill__
-//          This assures correct filling of cells
+	object.grid.resolution = object.sdf.resolution * sres_to_gres;
+	//walk around on barycentric coordinates of each triangle
+	for (int i = 0;i < object.triangles.size();i++){
+		Triangle tri = object.triangles.at(i);
 		set<vec3_int> points;
-		double a_res = 0.5 * grid_resolution / tri.p[0].length();
-		double b_res = 0.5 * grid_resolution / tri.p[1].length();
+		double a_res = 0.5 * object.grid.resolution / tri.p[0].length();
+		double b_res = 0.5 * object.grid.resolution / tri.p[1].length();
 		for (double a = 0;a < 1.0;a+=a_res){
 			for (double b = 0;b < 1.0-a;b+=b_res){
 				a = min(1.0, a);
@@ -511,37 +523,22 @@ int main(int argc, char **argv){
 							a*tri.p[0] +
 							b*tri.p[1] +
 							c*tri.p[2]
-						) / grid_resolution
+						) / object.grid.resolution
 					);
 				points.insert(point);
 				for (set<vec3_int>::iterator it = points.begin();it != points.end();++it)
-					bunny.gridmap[*it].insert(tri);
+					object.grid.map[*it].insert(tri);
 			}
 		}
-#endif
-#ifndef __correct_fill__
-		set<vec3_int> points{
-			vec3_int(tri.p[0] / grid_resolution),
-			vec3_int(tri.p[1] / grid_resolution),
-			vec3_int(tri.p[2] / grid_resolution),
-		};
-
-		for (set<vec3_int>::iterator it = points.begin();it != points.end();++it)
-			bunny.gridmap[*it].insert(tri);
-#endif
 	}
 
 	int avg = 0;
 	int count = 0;
-	for (GridMap::iterator iter = bunny.gridmap.begin(); iter != bunny.gridmap.end(); ++iter){
+	for (GridMap::iterator iter = object.grid.map.begin(); iter != object.grid.map.end(); ++iter){
 		avg += iter->second.size();
 		count++;
 	}
 	cerr << (avg / (float)count) << " triangles / cell (avg)"<< endl;
-
-	cerr << "loading sdf" << endl;
-	loadSDF(bunny.sdf, "bunny.sdf");
-	cerr << "loading complete" << endl;
 
 	double total_duration = 0;
 	for (double angle_loop = 0;angle_loop < 360;angle_loop += angle){
@@ -557,7 +554,7 @@ int main(int argc, char **argv){
 		double frame_height = frame_width / aspect;
 		double eye_frame_distance = 1; //or focal length?
 
-		vec3 camera_origin = vec3(0,0.5*(bunny.bounds.max.y() + bunny.bounds.min.y()),-cam_distance);
+		vec3 camera_origin = vec3(0,0.5*(object.bounds.max.y() + object.bounds.min.y()),-cam_distance);
 		camera_origin = rotateY(camera_origin, angle_loop);
 
 		vec3 frame_topleft = vec3(-frame_width/2, frame_height/2, eye_frame_distance);
@@ -579,7 +576,7 @@ int main(int argc, char **argv){
 						0
 					);
 					ray = rotateY(ray, angle_loop);
-					average += get_color(camera_origin, ray, bunny);
+					average += get_color(camera_origin, ray, object);
 				}
 				average /= aliasing_iters;
 				image[y*image_width + x] = average;
