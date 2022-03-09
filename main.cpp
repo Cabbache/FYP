@@ -8,6 +8,7 @@
 #include <set>
 #include <limits>
 #include <unordered_map>
+#include <unordered_set>
 
 #include "vec3.h"
 #include "tiny_obj_loader.h"
@@ -31,9 +32,22 @@ typedef struct hitInfo{
 typedef struct Triangle{
 	vec3 p[3];
 	bool reflective;
+
+	bool operator==(const Triangle& triangle) const{
+		return p[0] == triangle.p[0] && p[1] == triangle.p[1] && p[2] == triangle.p[2];
+	}
+
+	struct HashFunction{
+		size_t operator()(const Triangle& triangle) const
+    {
+			hashFuncVec hfv;
+			return hfv(triangle.p[0]) ^ hfv(triangle.p[1]) ^ hfv(triangle.p[2]);
+    }
+	};
+
 } Triangle;
 
-typedef unordered_map<vec3_int, vector<Triangle>, hashFunc, equalsFunc> GridMap;
+typedef unordered_map<vec3_int, unordered_set<Triangle, Triangle::HashFunction>, hashFuncVec, equalsFunc> GridMap;
 
 typedef struct Volume{
 	vec3 min;
@@ -479,7 +493,7 @@ int main(int argc, char **argv){
 	for (int i = 0;i < bunny.triangles.size();i++){
 		Triangle tri = bunny.triangles.at(i);
 
-//#define __correct_fill__
+#define __correct_fill__
 
 #ifdef __correct_fill__
 //          This assures correct filling of cells
@@ -500,9 +514,8 @@ int main(int argc, char **argv){
 						) / grid_resolution
 					);
 				points.insert(point);
-				cerr << points.size() << endl;
 				for (set<vec3_int>::iterator it = points.begin();it != points.end();++it)
-					bunny.gridmap[*it].push_back(tri);
+					bunny.gridmap[*it].insert(tri);
 			}
 		}
 #endif
@@ -514,9 +527,17 @@ int main(int argc, char **argv){
 		};
 
 		for (set<vec3_int>::iterator it = points.begin();it != points.end();++it)
-			bunny.gridmap[*it].push_back(tri);
+			bunny.gridmap[*it].insert(tri);
 #endif
 	}
+
+	int avg = 0;
+	int count = 0;
+	for (GridMap::iterator iter = bunny.gridmap.begin(); iter != bunny.gridmap.end(); ++iter){
+		avg += iter->second.size();
+		count++;
+	}
+	cerr << (avg / (float)count) << " triangles / cell (avg)"<< endl;
 
 	cerr << "loading sdf" << endl;
 	loadSDF(bunny.sdf, "bunny.sdf");

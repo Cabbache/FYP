@@ -19,6 +19,10 @@ class vec3 {
 		double operator[](int i) const { return e[i]; }
 		double& operator[](int i) { return e[i]; }
 
+		bool operator==(const vec3 &v) const{
+			return e[0] == v.e[0] && e[1] == v.e[1] && e[2] == v.e[2];
+		}
+
 		vec3& operator+=(const vec3 &v) {
 			e[0] += v.e[0];
 			e[1] += v.e[1];
@@ -77,7 +81,7 @@ class vec3_int{
 		}
 };
 
-struct hashFunc{
+struct hashFuncVec{
 	size_t operator()(const vec3_int &k) const{
 		size_t h1 = std::hash<int>()(k.x);
 		size_t h2 = std::hash<int>()(k.y);
