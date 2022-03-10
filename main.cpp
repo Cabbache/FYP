@@ -491,11 +491,11 @@ int main(int argc, char **argv){
 		double a_res = 0.2 * object.grid.resolution / tri.p[0].length();
 		double b_res = 0.2 * object.grid.resolution / tri.p[1].length();
 		for (double a = 0;a <= 1.0 + a_res;a+=a_res){
-			for (double b = 0;b <= 1.0-a + b_res;b+=b_res){
+			for (double b = 0;b <= 1.0 - min(1.0,a) + b_res;b+=b_res){
 
 				//clipping
 				double a_c = min(1.0, a);
-				double b_c = min(1.0-a, b);
+				double b_c = min(1.0-a_c, b);
 				double c = 1.0 - a_c - b_c;
 
 				vec3_int point(
