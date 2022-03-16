@@ -12,5 +12,7 @@
 *.swp
 *.ppm
 *.obj
+*.zip
+*.mp4
 
 results/

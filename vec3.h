@@ -69,7 +69,11 @@ class vec3_int{
 	public:
 		int x,y,z;
 
-		vec3_int(int x, int y, int z): x(x), y(y), z(z){};
+		vec3_int(double x, double y, double z){
+			this->x = (int)round(x);
+			this->y = (int)round(y);
+			this->z = (int)round(z);
+		}
 		vec3_int(vec3 point){
 			this->x = (int)round(point[0]);
 			this->y = (int)round(point[1]);

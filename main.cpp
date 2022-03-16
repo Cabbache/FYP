@@ -16,8 +16,7 @@
 using namespace std;
 
 double total_marchtime = 0;
-//const double sres_to_gres = 1.8;
-const double sres_to_gres = 10;
+const double sres_to_gres = 5;
 
 typedef struct hitInfo{
 	vec3 ray;
@@ -365,8 +364,11 @@ vec3 get_color(vec3 origin, vec3 ray, const Obj &obj, int depth=0){
 		total_marchtime += elapsed_seconds.count();
 
 		if (march.hit){
+			//vec3 hitpoint = (march.origin + (march.ray * march.t)) / obj.grid.resolution;
+
 			vec3_int center((march.origin + (march.ray * march.t)) / obj.grid.resolution);
 			const int cubelength = 0;
+
 			for (int a = -cubelength;a <= cubelength;a++)
 			for (int b = -cubelength;b <= cubelength;b++)
 			for (int c = -cubelength;c <= cubelength;c++){
@@ -458,6 +460,12 @@ int main(int argc, char **argv){
 	const unsigned int image_width = 1280;
 	const unsigned int image_height = 960;
 
+	//const unsigned int image_width = 160;
+	//const unsigned int image_height = 120;
+
+	//const unsigned int image_width = 40;
+	//const unsigned int image_height = 30;
+
 	const unsigned int aliasing_iters = 2;
 	const double angle = 1.0;
 	//const double cam_distance = 0.5;
@@ -470,14 +478,14 @@ int main(int argc, char **argv){
 	cout << object.bounds.min << ", " << object.bounds.max << endl;
 	const double cam_distance = max(
 		max(
-			object.bounds.min.x(),
-			object.bounds.min.z()
+			abs(object.bounds.min.x()),
+			abs(object.bounds.min.z())
 		),
 		max(
-			object.bounds.max.x(),
-			object.bounds.max.z()
+			abs(object.bounds.max.x()),
+			abs(object.bounds.max.z())
 		)
-	) * 4;
+	) * 2;
 
 	cerr << "loading sdf" << endl;
 	loadSDF(object.sdf, "object.sdf");
@@ -485,7 +493,14 @@ int main(int argc, char **argv){
 	cerr << "generating hashmap" << endl;
 	object.grid.resolution = object.sdf.resolution * sres_to_gres;
 	//walk around on barycentric coordinates of each triangle
+
+	int last = 0;
 	for (int i = 0;i < object.triangles.size();i++){
+		int percentage = (100 * (float)i / object.triangles.size());
+		if (last != percentage && percentage && percentage % 5 == 0){
+			cerr << percentage << "%" << endl;
+			last = percentage;
+		}
 		Triangle tri = object.triangles.at(i);
 		set<vec3_int> points;
 		double a_res = 0.2 * object.grid.resolution / tri.p[0].length();
@@ -512,6 +527,7 @@ int main(int argc, char **argv){
 			object.grid.map[*it].insert(tri);
 	}
 
+	cerr << "counting triangles" << endl;
 	int avg = 0;
 	int count = 0;
 	for (GridMap::iterator iter = object.grid.map.begin(); iter != object.grid.map.end(); ++iter){
@@ -542,7 +558,7 @@ int main(int argc, char **argv){
 		
 		cerr << "Starting timer" << endl;
 		auto start = std::chrono::system_clock::now();
-		#pragma omp parallel for num_threads(4)
+		#pragma omp parallel for num_threads(8)
 		for (int y = 0;y < image_height;y++){
 			for (int x = 0;x < image_width;x++){
 				vec3 average(0,0,0);
