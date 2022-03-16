@@ -67,7 +67,7 @@ void loadSDF(SDF &sdf, string filename){
 
 int main(int argc, char **argv){
 	if (argc != 3){
-		cerr << "Usage: " << argv[0] << " file.sdf num_slices" << endl;
+		cerr << "Usage: " << argv[0] << " [file.sdf] [num_slices]" << endl;
 		return 0;
 	}
 

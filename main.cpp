@@ -16,7 +16,10 @@
 using namespace std;
 
 double total_marchtime = 0;
-const double sres_to_gres = 5;
+const double sres_to_gres = 2;
+
+uint32_t total_cells = 0;
+uint32_t total_hits = 0;
 
 typedef struct hitInfo{
 	vec3 ray;
@@ -364,18 +367,33 @@ vec3 get_color(vec3 origin, vec3 ray, const Obj &obj, int depth=0){
 		total_marchtime += elapsed_seconds.count();
 
 		if (march.hit){
-			//vec3 hitpoint = (march.origin + (march.ray * march.t)) / obj.grid.resolution;
+			vec3 hitpoint = (march.origin + (march.ray * march.t)) / obj.grid.resolution;
 
-			vec3_int center((march.origin + (march.ray * march.t)) / obj.grid.resolution);
-			const int cubelength = 0;
-
-			for (int a = -cubelength;a <= cubelength;a++)
-			for (int b = -cubelength;b <= cubelength;b++)
-			for (int c = -cubelength;c <= cubelength;c++){
-				vec3_int nearby(center.x+a, center.y+b, center.z+c);
-				if (obj.grid.map.count(nearby) != 1)
+			set<vec3_int> points;
+			points.insert(hitpoint); //to start checking from this cell
+			for (int a = -1;a <= 1;a++)
+			for (int b = -1;b <= 1;b++)
+			for (int c = -1;c <= 1;c++){
+				if (abs(a) + abs(b) + abs(c) != 1)
 					continue;
-				for (Triangle tri : obj.grid.map.at(nearby)){
+				points.insert(
+					vec3_int(
+						hitpoint + vec3(
+							a*obj.sdf.resolution*60,
+							b*obj.sdf.resolution*60,
+							c*obj.sdf.resolution*60
+						)
+					)
+				);
+			}
+
+			total_hits++;
+			total_cells += points.size();
+
+			for (set<vec3_int>::iterator it = points.begin();it != points.end();++it){
+				if (obj.grid.map.count(*it) != 1)
+					continue;
+				for (Triangle tri : obj.grid.map.at(*it)){
 					hitInfo check = {
 						ray,
 						origin,
@@ -389,9 +407,10 @@ vec3 get_color(vec3 origin, vec3 ray, const Obj &obj, int depth=0){
 					closest = check;
 					closestTri = tri;
 
-					break;
+					goto end_iter;
 				}
 			}
+			end_iter:;
 		}
 	}
 
@@ -425,14 +444,16 @@ vec3 get_color(vec3 origin, vec3 ray, const Obj &obj, int depth=0){
 		return vec3(0,0,0);
 	
 	//color the non mirror triangle
-	vec3 color = unit_vector(
-		vec3(
-			(hitpoint - closestTri.p[0]).length(),
-			(hitpoint - closestTri.p[1]).length(),
-			(hitpoint - closestTri.p[2]).length()
-		)
-	)*255;
-	return color;
+//	vec3 color = unit_vector(
+//		vec3(
+//			(hitpoint - closestTri.p[0]).length(),
+//			(hitpoint - closestTri.p[1]).length(),
+//			(hitpoint - closestTri.p[2]).length()
+//		)
+//	)*255;
+//	return color;
+	vec3 color(127 * ((unit_vector(hitpoint - (obj.bounds.min + obj.bounds.max) / 2)) + vec3(1,1,1)));
+	return vec3(color.z(), color.x(), color.y());
 }
 
 Volume getBoundingVolume(const vector<Triangle> &triangles){
@@ -457,11 +478,11 @@ Volume getBoundingVolume(const vector<Triangle> &triangles){
 }
 
 int main(int argc, char **argv){
-	const unsigned int image_width = 1280;
-	const unsigned int image_height = 960;
+	//const unsigned int image_width = 1280;
+	//const unsigned int image_height = 960;
 
-	//const unsigned int image_width = 160;
-	//const unsigned int image_height = 120;
+	const unsigned int image_width = 160;
+	const unsigned int image_height = 120;
 
 	//const unsigned int image_width = 40;
 	//const unsigned int image_height = 30;
@@ -503,8 +524,8 @@ int main(int argc, char **argv){
 		}
 		Triangle tri = object.triangles.at(i);
 		set<vec3_int> points;
-		double a_res = 0.2 * object.grid.resolution / tri.p[0].length();
-		double b_res = 0.2 * object.grid.resolution / tri.p[1].length();
+		double a_res = 0.3 * object.grid.resolution / tri.p[0].length();
+		double b_res = 0.3 * object.grid.resolution / tri.p[1].length();
 		for (double a = 0;a <= 1.0 + a_res;a+=a_res){
 			for (double b = 0;b <= 1.0 - min(1.0,a) + b_res;b+=b_res){
 
@@ -558,7 +579,7 @@ int main(int argc, char **argv){
 		
 		cerr << "Starting timer" << endl;
 		auto start = std::chrono::system_clock::now();
-		#pragma omp parallel for num_threads(8)
+		#pragma omp parallel for num_threads(1)
 		for (int y = 0;y < image_height;y++){
 			for (int x = 0;x < image_width;x++){
 				vec3 average(0,0,0);
@@ -583,7 +604,10 @@ int main(int argc, char **argv){
 		cerr << "duration: " << elapsed_seconds.count() << endl;
 		total_duration += elapsed_seconds.count();
 		cerr << "march time: " << (100.0 * total_marchtime / elapsed_seconds.count()) << "%" << endl;
+		cerr << total_cells / (double)total_hits << " blocks / hit " << endl;
 		total_marchtime = 0.0;
+		total_cells = 0;
+		total_hits = 0;
 
 		cerr << "Writing image to file" << endl;
 
