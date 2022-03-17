@@ -67,17 +67,19 @@ void loadSDF(SDF &sdf, string filename){
 
 int main(int argc, char **argv){
 	if (argc != 3){
-		cerr << "Usage: " << argv[0] << " [file.sdf] [num_slices]" << endl;
+		cerr << "Usage: " << argv[0] << " [file.sdf] [num_slices (0 means all)]" << endl;
 		return 0;
 	}
 
 	int num_slices = atoi(argv[2]);
 
+	cerr << "Loading sdf" << endl;
 	SDF sdf;
 	loadSDF(sdf, argv[1]);
 
 	if (num_slices <= 0)
 		num_slices = (int)sdf.dimensions.x();
+
 	cerr << "Writing " << num_slices << " slices" << endl;
 
 	for (int sliceX = 0;sliceX < (int)sdf.dimensions.x();sliceX += (int)sdf.dimensions.x() / num_slices){
@@ -108,7 +110,7 @@ int main(int argc, char **argv){
 				double value = sdf.values[sliceX][y][z];
 				int adjusted = (int)((value - minvalue) * (255.0 / (maxvalue - minvalue)));
 				if (value > 0)
-					ppm << adjusted << " " << adjusted << " " << adjusted << endl;
+					ppm << adjusted << " " << " 0 " << " " << adjusted << endl;
 				else
 					ppm << 255-adjusted << " 255 " << 255-adjusted << endl;
 			}

@@ -7,6 +7,7 @@
 #include <chrono>
 #include <set>
 #include <limits>
+#include <algorithm>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -81,6 +82,8 @@ typedef struct SDFResult{
 	bool inside;
 	double value;
 } SDFResult;
+
+typedef pair<const Obj*, double> Ohd;
 
 //maps world coordinates to sdf coordinates and returns value of sdf
 bool getValue(const SDF &sdf, const vec3 &world, SDFResult &res){
@@ -330,12 +333,12 @@ void boxHit(hitInfo &info, const Volume &box){
 	info.t = tmin;
 }
 
-vec3 get_color(vec3 origin, vec3 ray, const Obj &obj, int depth=0){
+vec3 get_color(vec3 origin, vec3 ray, const vector<Obj> &world, int depth=0){
 	//sometimes rays get stuck inside the 3d model
 	if (depth > 40)
 		return vec3(0,0,0);
-		
 	ray = unit_vector(ray);
+
 	Triangle closestTri;
 	hitInfo closest = {
 		ray,
@@ -343,75 +346,91 @@ vec3 get_color(vec3 origin, vec3 ray, const Obj &obj, int depth=0){
 		false,
 		std::numeric_limits<float>::max(),
 	};
-	
-	hitInfo boxintersect = {
-		ray,
-		origin,
-		false,
-		0,
-	};
-	boxHit(boxintersect, obj.bounds);
 
-	if (boxintersect.hit){
+	vector<Ohd> boxes_hit;
+	
+	for (auto it = world.begin(); it != world.end(); ++it){
+		hitInfo boxintersect = {
+			ray,
+			origin,
+			false,
+			0,
+		};
+		boxHit(boxintersect, it->bounds);
+		if (boxintersect.hit)
+			boxes_hit.push_back(make_pair(&(*it), boxintersect.t));
+	}
+
+	//order boxes by their distance from ray origin
+	sort(
+		boxes_hit.begin(),
+		boxes_hit.end(),
+		[](const Ohd &o1, const Ohd &o2) -> bool{
+			return o1.second > o2.second;
+		}
+	);
+
+	for (Ohd ohd: boxes_hit){
 		hitInfo march = {
 			ray,
-			origin + (boxintersect.t * ray),
+			origin + (ohd.second * ray), //start marching from ray box intersection
 			false,
 			0,
 		};
 
 		auto start = std::chrono::system_clock::now();
-		marchSDF(obj.sdf, march);
+		marchSDF(ohd.first->sdf, march);
 		auto end = std::chrono::system_clock::now();
 		std::chrono::duration<double> elapsed_seconds = end-start;
 		total_marchtime += elapsed_seconds.count();
 
-		if (march.hit){
-			vec3 hitpoint = (march.origin + (march.ray * march.t)) / obj.grid.resolution;
+		if (!march.hit)
+			continue;
 
-			set<vec3_int> points;
-			points.insert(hitpoint); //to start checking from this cell
-			for (int a = -1;a <= 1;a++)
-			for (int b = -1;b <= 1;b++)
-			for (int c = -1;c <= 1;c++){
-				if (abs(a) + abs(b) + abs(c) != 1)
-					continue;
-				points.insert(
-					vec3_int(
-						hitpoint + vec3(
-							a*obj.sdf.resolution*60,
-							b*obj.sdf.resolution*60,
-							c*obj.sdf.resolution*60
-						)
+		vec3 hitpoint = (march.origin + (march.ray * march.t)) / ohd.first->grid.resolution;
+
+		set<vec3_int> points;
+		points.insert(hitpoint); //to start checking from this cell
+		for (int a = -1;a <= 1;a++)
+		for (int b = -1;b <= 1;b++)
+		for (int c = -1;c <= 1;c++){
+			if (abs(a) + abs(b) + abs(c) != 1)
+				continue;
+			points.insert(
+				vec3_int(
+					hitpoint + vec3(
+						a*ohd.first->sdf.resolution*60,
+						b*ohd.first->sdf.resolution*60,
+						c*ohd.first->sdf.resolution*60
 					)
-				);
-			}
-
-			total_hits++;
-			total_cells += points.size();
-
-			for (set<vec3_int>::iterator it = points.begin();it != points.end();++it){
-				if (obj.grid.map.count(*it) != 1)
-					continue;
-				for (Triangle tri : obj.grid.map.at(*it)){
-					hitInfo check = {
-						ray,
-						origin,
-						false,
-						0.0f
-					};
-					triHit(tri, check);
-					if (!check.hit)
-						continue;
-					
-					closest = check;
-					closestTri = tri;
-
-					goto end_iter;
-				}
-			}
-			end_iter:;
+				)
+			);
 		}
+
+		total_hits++;
+
+		for (set<vec3_int>::iterator it = points.begin();it != points.end();++it){
+			if (ohd.first->grid.map.count(*it) != 1)
+				continue;
+			total_cells++;
+			for (Triangle tri : ohd.first->grid.map.at(*it)){
+				hitInfo check = {
+					ray,
+					origin,
+					false,
+					0.0f
+				};
+				triHit(tri, check);
+				if (!check.hit)
+					continue;
+				
+				closest = check;
+				closestTri = tri;
+
+				goto end_iter;
+			}
+		}
+		end_iter:;
 	}
 
 	//if no triangles hit, color the background
@@ -436,7 +455,7 @@ vec3 get_color(vec3 origin, vec3 ray, const Obj &obj, int depth=0){
 		//vec3 deflect = unit_vector(vec3(drand()-0.5, drand()-0.5, drand()-0.5));
 		//reflected += deflect / 20;
 
-		return get_color(hitpoint, reflected, obj, ++depth);
+		return get_color(hitpoint, reflected, world, ++depth);
 	}
 
 	//if hit border of non mirror triangle, make border black
@@ -444,16 +463,16 @@ vec3 get_color(vec3 origin, vec3 ray, const Obj &obj, int depth=0){
 		return vec3(0,0,0);
 	
 	//color the non mirror triangle
-//	vec3 color = unit_vector(
-//		vec3(
-//			(hitpoint - closestTri.p[0]).length(),
-//			(hitpoint - closestTri.p[1]).length(),
-//			(hitpoint - closestTri.p[2]).length()
-//		)
-//	)*255;
-//	return color;
-	vec3 color(127 * ((unit_vector(hitpoint - (obj.bounds.min + obj.bounds.max) / 2)) + vec3(1,1,1)));
-	return vec3(color.z(), color.x(), color.y());
+	vec3 color = unit_vector(
+		vec3(
+			(hitpoint - closestTri.p[0]).length(),
+			(hitpoint - closestTri.p[1]).length(),
+			(hitpoint - closestTri.p[2]).length()
+		)
+	)*255;
+	return color;
+	//vec3 color(127 * ((unit_vector(hitpoint - (obj.bounds.min + obj.bounds.max) / 2)) + vec3(1,1,1)));
+	//return vec3(color.z(), color.x(), color.y());
 }
 
 Volume getBoundingVolume(const vector<Triangle> &triangles){
@@ -477,26 +496,114 @@ Volume getBoundingVolume(const vector<Triangle> &triangles){
 	return Volume{min, max};
 }
 
+//This does not translate the gridmap
+void translateObj(Obj &object, vec3 translation){
+	//shfit triangles
+	for (auto it = object.triangles.begin();it != object.triangles.end();++it){
+		it->p[0] += translation;
+		it->p[1] += translation;
+		it->p[2] += translation;
+	}
+	object.bounds.min += translation;
+	object.bounds.max += translation;
+	
+	object.sdf.origin += translation;
+	object.sdf.corner += translation;
+}
+
 int main(int argc, char **argv){
-	//const unsigned int image_width = 1280;
-	//const unsigned int image_height = 960;
+	const unsigned int image_width = 1536;
+	const unsigned int image_height = 1152;
 
-	const unsigned int image_width = 160;
-	const unsigned int image_height = 120;
-
-	//const unsigned int image_width = 40;
-	//const unsigned int image_height = 30;
-
+	//const unsigned int image_width = 160;
+	//const unsigned int image_height = 120;
 	const unsigned int aliasing_iters = 2;
 	const double angle = 1.0;
-	//const double cam_distance = 0.5;
 	const double aspect = (double)image_width / image_height;
+	const string objFiles = "loads.txt";
 
-	cerr << "loading obj" << endl;
-	Obj object;
-	loadTriangles("object.obj", object.triangles);
-	object.bounds = getBoundingVolume(object.triangles);
-	cout << object.bounds.min << ", " << object.bounds.max << endl;
+	vector<Obj> world;
+	cerr << "loading objs" << endl;
+
+	ifstream obsFile(objFiles);
+	if (!obsFile.is_open()){
+		cerr << "Failed to open objs file" << endl;
+		return 1;
+	}
+
+	vec3 translations[] = {
+		vec3(0,0,0),
+		vec3(1,0,0),
+		vec3(0,3,0),
+		vec3(0,0,1),
+		vec3(-1,0,0),
+		vec3(0,-1,0),
+		vec3(0,0,-1)
+	};
+
+	string line;
+	int tt = 0;
+	while (getline(obsFile, line)){
+		cerr << "Loading " << line << endl;
+		Obj object;
+		loadTriangles(line + ".obj", object.triangles);
+		cerr << "loading sdf" << endl;
+		loadSDF(object.sdf, line + ".sdf");
+
+		object.bounds = getBoundingVolume(object.triangles);
+		translateObj(object, translations[tt++]);
+
+		cout << object.bounds.min << ", " << object.bounds.max << endl;
+
+		cerr << "generating hashmap" << endl;
+		object.grid.resolution = object.sdf.resolution * sres_to_gres;
+		//walk around on barycentric coordinates of each triangle
+
+		int last = 0;
+		for (int i = 0;i < object.triangles.size();i++){
+			int percentage = (100 * (float)i / object.triangles.size());
+			if (last != percentage && percentage && percentage % 5 == 0){
+				cerr << percentage << "%" << endl;
+				last = percentage;
+			}
+			Triangle tri = object.triangles.at(i);
+			set<vec3_int> points;
+			double a_res = 0.3 * object.grid.resolution / tri.p[0].length();
+			double b_res = 0.3 * object.grid.resolution / tri.p[1].length();
+			for (double a = 0;a <= 1.0 + a_res;a+=a_res){
+				for (double b = 0;b <= 1.0 - min(1.0,a) + b_res;b+=b_res){
+
+					//clipping
+					double a_c = min(1.0, a);
+					double b_c = min(1.0-a_c, b);
+					double c = 1.0 - a_c - b_c;
+
+					vec3_int point(
+							(
+								a_c*tri.p[0] +
+								b_c*tri.p[1] +
+								c*tri.p[2]
+							) / object.grid.resolution
+						);
+					points.insert(point);
+				}
+			}
+			for (set<vec3_int>::iterator it = points.begin();it != points.end();++it)
+				object.grid.map[*it].insert(tri);
+		}
+
+		cerr << "counting triangles" << endl;
+		int avg = 0;
+		int count = 0;
+		for (GridMap::iterator iter = object.grid.map.begin(); iter != object.grid.map.end(); ++iter){
+			avg += iter->second.size();
+			count++;
+		}
+		cerr << (avg / (float)count) << " triangles / cell (avg)"<< endl;
+		world.push_back(object);
+	}
+
+	Obj object = world.at(0);
 	const double cam_distance = max(
 		max(
 			abs(object.bounds.min.x()),
@@ -507,55 +614,6 @@ int main(int argc, char **argv){
 			abs(object.bounds.max.z())
 		)
 	) * 2;
-
-	cerr << "loading sdf" << endl;
-	loadSDF(object.sdf, "object.sdf");
-
-	cerr << "generating hashmap" << endl;
-	object.grid.resolution = object.sdf.resolution * sres_to_gres;
-	//walk around on barycentric coordinates of each triangle
-
-	int last = 0;
-	for (int i = 0;i < object.triangles.size();i++){
-		int percentage = (100 * (float)i / object.triangles.size());
-		if (last != percentage && percentage && percentage % 5 == 0){
-			cerr << percentage << "%" << endl;
-			last = percentage;
-		}
-		Triangle tri = object.triangles.at(i);
-		set<vec3_int> points;
-		double a_res = 0.3 * object.grid.resolution / tri.p[0].length();
-		double b_res = 0.3 * object.grid.resolution / tri.p[1].length();
-		for (double a = 0;a <= 1.0 + a_res;a+=a_res){
-			for (double b = 0;b <= 1.0 - min(1.0,a) + b_res;b+=b_res){
-
-				//clipping
-				double a_c = min(1.0, a);
-				double b_c = min(1.0-a_c, b);
-				double c = 1.0 - a_c - b_c;
-
-				vec3_int point(
-						(
-							a_c*tri.p[0] +
-							b_c*tri.p[1] +
-							c*tri.p[2]
-						) / object.grid.resolution
-					);
-				points.insert(point);
-			}
-		}
-		for (set<vec3_int>::iterator it = points.begin();it != points.end();++it)
-			object.grid.map[*it].insert(tri);
-	}
-
-	cerr << "counting triangles" << endl;
-	int avg = 0;
-	int count = 0;
-	for (GridMap::iterator iter = object.grid.map.begin(); iter != object.grid.map.end(); ++iter){
-		avg += iter->second.size();
-		count++;
-	}
-	cerr << (avg / (float)count) << " triangles / cell (avg)"<< endl;
 
 	double total_duration = 0;
 	for (double angle_loop = 0;angle_loop < 360;angle_loop += angle){
@@ -579,7 +637,7 @@ int main(int argc, char **argv){
 		
 		cerr << "Starting timer" << endl;
 		auto start = std::chrono::system_clock::now();
-		#pragma omp parallel for num_threads(1)
+		#pragma omp parallel for num_threads(8)
 		for (int y = 0;y < image_height;y++){
 			for (int x = 0;x < image_width;x++){
 				vec3 average(0,0,0);
@@ -593,7 +651,7 @@ int main(int argc, char **argv){
 						0
 					);
 					ray = rotateY(ray, angle_loop);
-					average += get_color(camera_origin, ray, object);
+					average += get_color(camera_origin, ray, world);
 				}
 				average /= aliasing_iters;
 				image[y*image_width + x] = average;
