@@ -17,7 +17,7 @@
 using namespace std;
 
 double total_marchtime = 0;
-const double sres_to_gres = 2;
+const double sres_to_gres = 3;
 
 uint32_t total_cells = 0;
 uint32_t total_hits = 0;
@@ -271,7 +271,9 @@ void marchSDF(const SDF &sdf, hitInfo &info){
 	vec3 p;
 	info.hit = false;
 	for (p = info.origin;getValue(sdf, p, sres);p += info.ray*abs(sres.value)){
-		if (sres.value <= 0){
+		//if (abs(sres.value) <= sdf.resolution/2){
+		if (sres.value <= sdf.resolution/2){
+		//if (sres.value <= 0){
 			info.hit = true;
 			info.t = (p-info.origin).length();
 			return;
@@ -371,64 +373,86 @@ vec3 get_color(vec3 origin, vec3 ray, const vector<Obj> &world, int depth=0){
 	);
 
 	for (Ohd ohd: boxes_hit){
-		hitInfo march = {
-			ray,
-			origin + (ohd.second * ray), //start marching from ray box intersection
-			false,
-			0,
-		};
+		vec3 march_origin = origin + (ohd.second * ray); //start marching from ray box intersection
+		while (!closest.hit){
+			hitInfo march = {
+				ray,
+				march_origin,
+				false,
+				0,
+			};
 
-		auto start = std::chrono::system_clock::now();
-		marchSDF(ohd.first->sdf, march);
-		auto end = std::chrono::system_clock::now();
-		std::chrono::duration<double> elapsed_seconds = end-start;
-		total_marchtime += elapsed_seconds.count();
+			auto start = std::chrono::system_clock::now();
+			marchSDF(ohd.first->sdf, march);
+			auto end = std::chrono::system_clock::now();
+			std::chrono::duration<double> elapsed_seconds = end-start;
+			total_marchtime += elapsed_seconds.count();
 
-		if (!march.hit)
-			continue;
+			if (!march.hit)
+				break;
 
-		vec3 hitpoint = (march.origin + (march.ray * march.t)) / ohd.first->grid.resolution;
+			vec3 hitpoint_world(march.origin + (march.ray * march.t));
+			vec3_int hitpoint_grid(hitpoint_world / ohd.first->grid.resolution);
 
-		set<vec3_int> points;
-		points.insert(hitpoint); //to start checking from this cell
-		for (int a = -1;a <= 1;a++)
-		for (int b = -1;b <= 1;b++)
-		for (int c = -1;c <= 1;c++){
-			if (abs(a) + abs(b) + abs(c) != 1)
-				continue;
-			points.insert(
-				vec3_int(
-					hitpoint + vec3(
-						a*ohd.first->sdf.resolution*60,
-						b*ohd.first->sdf.resolution*60,
-						c*ohd.first->sdf.resolution*60
-					)
-				)
-			);
-		}
-
-		total_hits++;
-
-		for (set<vec3_int>::iterator it = points.begin();it != points.end();++it){
-			if (ohd.first->grid.map.count(*it) != 1)
-				continue;
-			total_cells++;
-			for (Triangle tri : ohd.first->grid.map.at(*it)){
-				hitInfo check = {
-					ray,
-					origin,
-					false,
-					0.0f
-				};
-				triHit(tri, check);
-				if (!check.hit)
+			//make a list of cells that need to be checked
+			set<vec3_int> points;
+			points.insert(hitpoint_grid); //make this first to start checking from this cell
+			#ifdef OPT_CHECK_ONCE
+				const int neighbours = 0;
+			#else
+				const int neighbours = 1;
+			#endif
+			for (int a = -neighbours;a <= neighbours;a++)
+			for (int b = -neighbours;b <= neighbours;b++)
+			for (int c = -neighbours;c <= neighbours;c++){
+				if (abs(a) + abs(b) + abs(c) != 1)
 					continue;
-				
-				closest = check;
-				closestTri = tri;
-
-				goto end_iter;
+				points.insert(
+					vec3_int(
+						(
+							hitpoint_world + vec3(
+								a*ohd.first->sdf.resolution*0.25, //0.25 is close to the magic number for sres_to_gres = 3
+								b*ohd.first->sdf.resolution*0.25,
+								c*ohd.first->sdf.resolution*0.25
+							)
+						) / ohd.first->grid.resolution
+					)
+				);
 			}
+
+			total_hits++;
+
+			//iterate on the cells added previously
+			for (set<vec3_int>::iterator it = points.begin();it != points.end();++it){
+				if (ohd.first->grid.map.count(*it) != 1) //ignore if cell is not inside grid
+					continue;
+				total_cells++;
+				//iterate on triangles in the cell
+				for (Triangle tri : ohd.first->grid.map.at(*it)){
+					hitInfo check = {
+						ray,
+						origin,
+						false,
+						0.0f
+					};
+					triHit(tri, check);
+					if (!check.hit)
+						continue;
+					
+					closest = check;
+					closestTri = tri;
+
+					//There is no depth test
+
+					goto end_iter;
+				}
+			}
+
+			#ifdef OPT_HIT_ONCE
+				break;
+			#else
+				march_origin = hitpoint_world + march.ray*ohd.first->sdf.resolution*2; //this constant important
+			#endif
 		}
 		end_iter:;
 	}
@@ -449,7 +473,7 @@ vec3 get_color(vec3 origin, vec3 ray, const vector<Obj> &world, int depth=0){
 				closestTri.p[0] - closestTri.p[2]
 			)
 		);
-		vec3 reflected = unit_vector(ray - 2*dot(ray, normal)*normal);
+		vec3 reflected = ray - 2*dot(ray, normal)*normal;
 
 		//fuzzy mirror
 		//vec3 deflect = unit_vector(vec3(drand()-0.5, drand()-0.5, drand()-0.5));
@@ -512,11 +536,17 @@ void translateObj(Obj &object, vec3 translation){
 }
 
 int main(int argc, char **argv){
-	const unsigned int image_width = 1536;
-	const unsigned int image_height = 1152;
+	//const unsigned int image_width = 1280*8;
+	//const unsigned int image_height = 960*8;
 
-	//const unsigned int image_width = 160;
-	//const unsigned int image_height = 120;
+	const unsigned int image_width = 1280;
+	const unsigned int image_height = 960;
+
+	//const unsigned int image_width = 400;
+	//const unsigned int image_height = 300;
+
+	//const unsigned int image_width = 40;
+	//const unsigned int image_height = 30;
 	const unsigned int aliasing_iters = 2;
 	const double angle = 1.0;
 	const double aspect = (double)image_width / image_height;
@@ -572,7 +602,6 @@ int main(int argc, char **argv){
 			double b_res = 0.3 * object.grid.resolution / tri.p[1].length();
 			for (double a = 0;a <= 1.0 + a_res;a+=a_res){
 				for (double b = 0;b <= 1.0 - min(1.0,a) + b_res;b+=b_res){
-
 					//clipping
 					double a_c = min(1.0, a);
 					double b_c = min(1.0-a_c, b);
@@ -613,7 +642,7 @@ int main(int argc, char **argv){
 			abs(object.bounds.max.x()),
 			abs(object.bounds.max.z())
 		)
-	) * 2;
+	) * 1.9;
 
 	double total_duration = 0;
 	for (double angle_loop = 0;angle_loop < 360;angle_loop += angle){

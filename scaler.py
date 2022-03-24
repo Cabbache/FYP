@@ -2,22 +2,22 @@
 
 import sys
 
-if len(sys.argv) != 3:
-	print("Usage: " + sys.argv[0] + " [obj file] [multiplier]")
+if len(sys.argv) != 2:
+	print("Usage: " + sys.argv[0] + " [uniform multiplier]")
 	sys.exit(1)
 
-filename = sys.argv[1]
-
 try:
-	scale = float(sys.argv[2])
+	scale = float(sys.argv[1])
 except ValueError:
 	print("multiplier not a float");
 	sys.exit(1)
 
-with open(filename) as objfile:
-	lines = [line.rstrip() for line in objfile]
+while True:
+	try:
+		line = input()
+	except EOFError:
+		break
 
-for line in lines:
 	if 'f' in line:
 		print(line)
 		continue

@@ -109,7 +109,7 @@ int main(int argc, char **argv){
 			for (int y = 0;y < sdf.dimensions.y();y++){
 				double value = sdf.values[sliceX][y][z];
 				int adjusted = (int)((value - minvalue) * (255.0 / (maxvalue - minvalue)));
-				if (value > 0)
+				if (value >= 0)
 					ppm << adjusted << " " << " 0 " << " " << adjusted << endl;
 				else
 					ppm << 255-adjusted << " 255 " << 255-adjusted << endl;
