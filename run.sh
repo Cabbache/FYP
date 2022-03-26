@@ -17,6 +17,6 @@ set -e
 #allow bigger stack size, otherwise there will be segfault
 ulimit -s unlimited
 
-./main
+./renderer
 
 conversion

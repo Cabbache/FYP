@@ -2,7 +2,7 @@
 
 #This program combines two obj files trivially by
 #simply appending the vertices and faces
-#Duplicate faces are not removed, use trimmer.py for this
+#Duplicate faces are not removed, use trimmer.py for that
 
 import sys
 

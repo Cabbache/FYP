@@ -550,7 +550,7 @@ int main(int argc, char **argv){
 	const unsigned int aliasing_iters = 2;
 	const double angle = 1.0;
 	const double aspect = (double)image_width / image_height;
-	const string objFiles = "loads.txt";
+	const string objFiles = argv[1];
 
 	vector<Obj> world;
 	cerr << "loading objs" << endl;
