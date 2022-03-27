@@ -666,6 +666,14 @@ int main(int argc, char **argv){
 		.scan<'d', int>()
 		.default_value(960)
 		.help("Output image height");
+	renderer.add_argument("-sw", "--sdl-width")
+		.scan<'d', int>()
+		.default_value(1280)
+		.help("SDL window width");
+	renderer.add_argument("-sh", "--sdl-height")
+		.scan<'d', int>()
+		.default_value(960)
+		.help("SDL window height");
 	renderer.add_argument("-a", "--antialiasing")
 		.scan<'d', int>()
 		.default_value(2)
@@ -686,46 +694,26 @@ int main(int argc, char **argv){
 	auto image_width = renderer.get<int>("--width");
 	auto image_height = renderer.get<int>("--height");
 	auto aliasing_iters = renderer.get<int>("--antialiasing");
+	auto window_width = renderer.get<int>("--sdl-width");
+	auto window_height = renderer.get<int>("--sdl-height");
 	auto sceneFilePath = renderer.get<string>("--scene");
 
-//	if (SDL_Init(SDL_INIT_VIDEO) < 0){
-//		cerr << "Error initalising SDL" << SDL_GetError() << endl;
-//	}
-//
-//	SDL_Window *win = nullptr;
-//	SDL_Renderer *renderer_sdl = nullptr;
-//	SDL_Texture *img = nullptr;
-//
-//	win = SDL_CreateWindow(
-//		"View",
-//		SDL_WINDOWPOS_CENTERED,
-//		SDL_WINDOWPOS_CENTERED,
-//		300,
-//		300,
-//		0
-//	);
-//
-//	renderer_sdl = SDL_CreateRenderer(win, -1, SDL_RENDERER_ACCELERATED);
-//	img = SDL_CreateTexture(renderer_sdl, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, image_width, image_height);
-//
-//	unsigned char *pixels;
-//	int pitch;
-//	
-//	SDL_LockTexture(img, NULL, (void**)&pixels, &pitch);
-//	for (int i = 0;i < pitch * image_height;i++){
-//		pixels[i] = 255;
-//	}
-//	SDL_UnlockTexture(img);
-//
-//	SDL_Rect texr;
-//	texr.x = 0;
-//	texr.y = 0;
-//	texr.w = 300;
-//	texr.h = 300;
-//	SDL_RenderClear(renderer_sdl);
-//	SDL_RenderCopy(renderer_sdl, img, NULL, &texr);
-//	SDL_RenderPresent(renderer_sdl);
-//	for (;;){}
+	if (SDL_Init(SDL_INIT_VIDEO) < 0){
+		cerr << "Error initalising SDL" << SDL_GetError() << endl;
+	}
+
+	SDL_Window *win = nullptr;
+	SDL_Renderer *renderer_sdl = nullptr;
+
+	win = SDL_CreateWindow(
+		"Scene view",
+		SDL_WINDOWPOS_CENTERED,
+		SDL_WINDOWPOS_CENTERED,
+		window_width,
+		window_height,
+		0
+	);
+	renderer_sdl = SDL_CreateRenderer(win, -1, SDL_RENDERER_ACCELERATED);
 
 	const double angle = 1.0;
 	const double aspect = (double)image_width / image_height;
@@ -756,28 +744,24 @@ int main(int argc, char **argv){
 		)
 	) * 1.9;
 
-
 	//frame buffer
 	double frame_width = 1;
 	double frame_height = frame_width / aspect;
 	double eye_frame_distance = 1; //or focal length?
+	vec3 frame_topleft = vec3(-frame_width/2, frame_height/2, eye_frame_distance);
 
 	double total_duration = 0;
+
+	unsigned char *image;
+	SDL_Texture *img = nullptr;
+	img = SDL_CreateTexture(renderer_sdl, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, image_width, image_height);
+		int pitch;
 	for (double angle_loop = 0;angle_loop < 360;angle_loop += angle){
-		ofstream ppm("img_"+to_string(int(angle_loop))+".ppm");
-
-		//ppm image headers
-		ppm << "P3" << endl
-		<< image_width << " " << image_height << endl
-		<< "255" << endl;
-
 		vec3 camera_origin = vec3(0,0.5*(sceneBounds.max.y() + sceneBounds.min.y()),-cam_distance);
 		camera_origin = rotateY(camera_origin, angle_loop);
 
-		vec3 frame_topleft = vec3(-frame_width/2, frame_height/2, eye_frame_distance);
-		
-		//vec3 *image = new vec3[image_height*image_width];
-		unsigned char *image = new unsigned char[image_width*image_height*4];
+		SDL_LockTexture(img, NULL, (void**)&image, &pitch);
+		cerr << "pitch = " << pitch << endl;
 		
 		cerr << "Starting timer" << endl;
 		auto start = std::chrono::system_clock::now();
@@ -786,7 +770,6 @@ int main(int argc, char **argv){
 			for (int x = 0;x < image_width;x++){
 				vec3 average(0,0,0);
 
-				//anti aliasing loop
 				for (int a = 0;a < aliasing_iters;a++){
 					vec3 ray = frame_topleft;
 					ray += vec3(
@@ -798,11 +781,10 @@ int main(int argc, char **argv){
 					average += get_color(camera_origin, ray, world);
 				}
 				average /= aliasing_iters;
-				//image[y*image_width + x] = average;
-				image[4*(y*image_width + x) + 0] = average[0];
-				image[4*(y*image_width + x) + 1] = average[1];
-				image[4*(y*image_width + x) + 2] = average[2];
-				image[4*(y*image_width + x) + 4] = 1;
+				image[4*(y*image_width + x) + 0] = 255;
+				image[4*(y*image_width + x) + 1] = average[2];
+				image[4*(y*image_width + x) + 2] = average[1];
+				image[4*(y*image_width + x) + 3] = average[0];
 			}
 		}
 		auto end = std::chrono::system_clock::now();
@@ -814,20 +796,41 @@ int main(int argc, char **argv){
 		total_marchtime = 0.0;
 		total_cells = 0;
 		total_hits = 0;
-
-		cerr << "Writing image to file" << endl;
-
-		for (int i = 0;i < image_height*image_width;i++){
-			for (int j = 0;j < 3;j++){
-				ppm << (int)image[4*i + j];
-				if (j != 2)
-					ppm << " ";
+		
+		if (0){
+			cerr << "Writing image to file" << endl;
+			ofstream ppm("img_"+to_string(int(angle_loop))+".ppm");
+			ppm << "P3" << endl
+			<< image_width << " " << image_height << endl
+			<< "255" << endl;
+			for (int i = 0;i < image_height*image_width;i++){
+				ppm
+				<< (int)image[4*i + 3] << " "
+				<< (int)image[4*i + 2] << " "
+				<< (int)image[4*i + 1] << endl;
 			}
-			ppm << endl;
+			ppm.close();
 		}
-		ppm.close();
 
-		delete image;
+		SDL_Event e;
+		if (SDL_PollEvent(&e)){
+			if (e.type == SDL_QUIT)
+				return 1;
+			else if (e.type == SDL_KEYUP && e.key.keysym.sym == SDLK_ESCAPE)
+				return 1;
+		}
+
+		SDL_UnlockTexture(img);
+
+		SDL_Rect texr;
+		texr.x = 0;
+		texr.y = 0;
+		texr.w = window_width;
+		texr.h = window_height;
+
+		SDL_RenderClear(renderer_sdl);
+		SDL_RenderCopy(renderer_sdl, img, NULL, &texr);
+		SDL_RenderPresent(renderer_sdl);
 	}
 	cerr << "total duration: " << total_duration << endl;
 	return 0;
