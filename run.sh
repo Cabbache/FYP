@@ -15,8 +15,7 @@ set -e
 ./compile.sh
 
 #allow bigger stack size, otherwise there will be segfault
-ulimit -s unlimited
+#ulimit -s unlimited
 
-./renderer
-
+./build/renderer -s scene.json
 conversion

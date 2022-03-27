@@ -7,13 +7,13 @@ project(
 		CXX
 )
 
-#default build type to release
-if (NOT EXISTS ${CMAKE_BINARY_DIR}/CMakeCache.txt)
-  if (NOT CMAKE_BUILD_TYPE)
-    set(CMAKE_BUILD_TYPE "Release" CACHE STRING "" FORCE)
-  endif()
+if(NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE Release)
 endif()
 
+#set(CMAKE_CXX_FLAGS "-Wall -Wextra")
+set(CMAKE_CXX_FLAGS_DEBUG "-g")
+set(CMAKE_CXX_FLAGS_RELEASE "-O3 -march=native")
 
 add_executable(renderer main.cpp)
 add_executable(visualize_sdf visualize_sdf.cpp)
@@ -26,3 +26,5 @@ if (OpenCV_FOUND)
 else()
 	message("OpenCV not found")
 endif()
+
+target_compile_features(renderer PRIVATE cxx_std_17)

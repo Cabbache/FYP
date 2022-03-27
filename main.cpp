@@ -12,6 +12,9 @@
 #include <unordered_map>
 #include <unordered_set>
 
+//#include <SDL2/SDL.h>
+//#include <SDL2/SDL_image.h>
+
 #include "headers/argparse.hpp"
 #include "headers/json.hpp"
 #include "headers/vec3.h"
@@ -372,7 +375,7 @@ vec3 get_color(vec3 origin, vec3 ray, const vector<Obj> &world, int depth=0){
 		boxes_hit.begin(),
 		boxes_hit.end(),
 		[](const Ohd &o1, const Ohd &o2) -> bool{
-			return o1.second > o2.second;
+			return o1.second < o2.second;
 		}
 	);
 
@@ -552,6 +555,7 @@ void scaleObj(Obj &object, double maxDimension){
 	object.sdf.origin *= scale;
 	object.sdf.corner *= scale;
 	
+	object.sdf.resolution *= scale;
 	for (int i = 0;i < object.sdf.dimensions[0];++i)
 	for (int j = 0;j < object.sdf.dimensions[1];++j)
 	for (int k = 0;k < object.sdf.dimensions[2];++k)
@@ -565,17 +569,21 @@ int main(int argc, char **argv){
 		.required()
 		.help("Specify input scene file");
 	renderer.add_argument("-w", "--width")
-		.default_value((uint32_t)1280)
-		.required()
+		.scan<'d', int>()
+		.default_value(1280)
 		.help("Output image width");
 	renderer.add_argument("-h", "--height")
-		.default_value((uint32_t)960)
-		.required()
+		.scan<'d', int>()
+		.default_value(960)
 		.help("Output image height");
 	renderer.add_argument("-a", "--antialiasing")
-		.default_value((uint32_t)2)
-		.required()
+		.scan<'d', int>()
+		.default_value(2)
 		.help("Number of iterations");
+	renderer.add_argument("-t", "--threads")
+		.scan<'d', int>()
+		.default_value(8)
+		.help("Number of threads");
 	
 	try{
 		renderer.parse_args(argc, argv);
@@ -585,9 +593,9 @@ int main(int argc, char **argv){
 		return 1;
 	}
 
-	auto image_width = renderer.get<uint32_t>("--width");
-	auto image_height = renderer.get<uint32_t>("--height");
-	auto aliasing_iters = renderer.get<uint32_t>("--antialiasing");
+	auto image_width = renderer.get<int>("--width");
+	auto image_height = renderer.get<int>("--height");
+	auto aliasing_iters = renderer.get<int>("--antialiasing");
 	auto sceneFilePath = renderer.get<string>("--scene");
 
 	const double angle = 1.0;
@@ -611,6 +619,7 @@ int main(int argc, char **argv){
 		loadTriangles(filepath + ".obj", object.triangles);
 		loadSDF(filepath + ".sdf", object.sdf);
 		object.bounds = getBoundingVolume(object.triangles);
+		cerr << "bounds: " << object.bounds.min << ", " << object.bounds.max << endl;
 		for (auto& el : object_json.items()){
 			if (el.key() == "translate"){
 				translateObj(
@@ -638,8 +647,11 @@ int main(int argc, char **argv){
 			}
 			Triangle tri = object.triangles.at(i);
 			set<vec3_int> points;
-			double a_res = 0.3 * object.grid.resolution / tri.p[0].length();
-			double b_res = 0.3 * object.grid.resolution / tri.p[1].length();
+			//double a_res = 0.3 * object.grid.resolution / tri.p[0].length();
+			//double b_res = 0.3 * object.grid.resolution / tri.p[1].length();
+			double a_res = 0.07;
+			double b_res = 0.07;
+			//cerr << a_res << ", " << b_res << endl;
 			for (double a = 0;a <= 1.0 + a_res;a+=a_res){
 				for (double b = 0;b <= 1.0 - min(1.0,a) + b_res;b+=b_res){
 					//clipping
@@ -701,7 +713,7 @@ int main(int argc, char **argv){
 		camera_origin = rotateY(camera_origin, angle_loop);
 
 		vec3 frame_topleft = vec3(-frame_width/2, frame_height/2, eye_frame_distance);
-		vec3 image[image_height*image_width];
+		vec3 *image = new vec3[image_height*image_width];
 		
 		cerr << "Starting timer" << endl;
 		auto start = std::chrono::system_clock::now();
@@ -742,6 +754,8 @@ int main(int argc, char **argv){
 			ppm << (int)color[0] << " " << (int)color[1] << " " << (int)color[2] << endl;
 		}
 		ppm.close();
+
+		delete image;
 	}
 	cerr << "total duration: " << total_duration << endl;
 	return 0;
