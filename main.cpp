@@ -1,5 +1,6 @@
 #define TINYOBJLOADER_IMPLEMENTATION // define this in only *one* .cc
 
+#include <getopt.h>
 #include <iostream>
 #include <vector>
 #include <fstream>
@@ -11,10 +12,13 @@
 #include <unordered_map>
 #include <unordered_set>
 
-#include "vec3.h"
-#include "tiny_obj_loader.h"
+#include "headers/argparse.hpp"
+#include "headers/json.hpp"
+#include "headers/vec3.h"
+#include "headers/tiny_obj_loader.h"
 
 using namespace std;
+using namespace nlohmann;
 
 double total_marchtime = 0;
 const double sres_to_gres = 3;
@@ -102,7 +106,7 @@ bool getValue(const SDF &sdf, const vec3 &world, SDFResult &res){
 }
 
 //loads sdf from sdf file
-void loadSDF(SDF &sdf, string filename){
+void loadSDF(string filename, SDF &sdf){
 	ifstream sfile(filename);
 	if (!sfile.is_open()){
 		cerr << "Failed to load SDF file" << endl;
@@ -447,7 +451,6 @@ vec3 get_color(vec3 origin, vec3 ray, const vector<Obj> &world, int depth=0){
 					goto end_iter;
 				}
 			}
-
 			#ifdef OPT_HIT_ONCE
 				break;
 			#else
@@ -511,10 +514,9 @@ Volume getBoundingVolume(const vector<Triangle> &triangles){
 		std::numeric_limits<double>::min()
 	);
 	for (Triangle tri : triangles){
-		for (int i = 0;i < 3;i++)
-		for (int j = 0;j < 3;j++){
-			min.e[j] = std::min(min.e[j], tri.p[i].e[j]);
-			max.e[j] = std::max(max.e[j], tri.p[i].e[j]);
+		for (int i = 0;i < 3;i++){
+			min.min(tri.p[i]);
+			max.max(tri.p[i]);
 		}
 	}
 	return Volume{min, max};
@@ -535,60 +537,98 @@ void translateObj(Obj &object, vec3 translation){
 	object.sdf.corner += translation;
 }
 
+void scaleObj(Obj &object, double maxDimension){
+	vec3 diff = (object.bounds.max - object.bounds.min);
+	double scale = maxDimension / max(max(diff[0], diff[1]), diff[2]);
+	for (auto it = object.triangles.begin();it != object.triangles.end();++it){
+		it->p[0] *= scale;
+		it->p[1] *= scale;
+		it->p[2] *= scale;
+	}
+
+	object.bounds.min *= scale;
+	object.bounds.max *= scale;
+	
+	object.sdf.origin *= scale;
+	object.sdf.corner *= scale;
+	
+	for (int i = 0;i < object.sdf.dimensions[0];++i)
+	for (int j = 0;j < object.sdf.dimensions[1];++j)
+	for (int k = 0;k < object.sdf.dimensions[2];++k)
+		object.sdf.values[i][j][k] *= scale;
+}
+
 int main(int argc, char **argv){
-	//const unsigned int image_width = 1280*8;
-	//const unsigned int image_height = 960*8;
 
-	const unsigned int image_width = 1280;
-	const unsigned int image_height = 960;
-
-	//const unsigned int image_width = 400;
-	//const unsigned int image_height = 300;
-
-	//const unsigned int image_width = 40;
-	//const unsigned int image_height = 30;
-	const unsigned int aliasing_iters = 2;
-	const double angle = 1.0;
-	const double aspect = (double)image_width / image_height;
-	const string objFiles = argv[1];
-
-	vector<Obj> world;
-	cerr << "loading objs" << endl;
-
-	ifstream obsFile(objFiles);
-	if (!obsFile.is_open()){
-		cerr << "Failed to open objs file" << endl;
+	argparse::ArgumentParser renderer("renderer");
+	renderer.add_argument("-s", "--scene")
+		.required()
+		.help("Specify input scene file");
+	renderer.add_argument("-w", "--width")
+		.default_value((uint32_t)1280)
+		.required()
+		.help("Output image width");
+	renderer.add_argument("-h", "--height")
+		.default_value((uint32_t)960)
+		.required()
+		.help("Output image height");
+	renderer.add_argument("-a", "--antialiasing")
+		.default_value((uint32_t)2)
+		.required()
+		.help("Number of iterations");
+	
+	try{
+		renderer.parse_args(argc, argv);
+	} catch (const runtime_error &err){
+		cerr << err.what() << endl;
+		cerr << renderer;
 		return 1;
 	}
 
-	vec3 translations[] = {
-		vec3(0,0,0),
-		vec3(1,0,0),
-		vec3(0,3,0),
-		vec3(0,0,1),
-		vec3(-1,0,0),
-		vec3(0,-1,0),
-		vec3(0,0,-1)
-	};
+	auto image_width = renderer.get<uint32_t>("--width");
+	auto image_height = renderer.get<uint32_t>("--height");
+	auto aliasing_iters = renderer.get<uint32_t>("--antialiasing");
+	auto sceneFilePath = renderer.get<string>("--scene");
 
-	string line;
-	int tt = 0;
-	while (getline(obsFile, line)){
-		cerr << "Loading " << line << endl;
+	const double angle = 1.0;
+	const double aspect = (double)image_width / image_height;
+
+	ifstream sceneFile(sceneFilePath);
+	if (!sceneFile.is_open()){
+		cerr << "Failed to open scene file" << endl;
+		return 1;
+	}
+
+	json scene;
+	sceneFile >> scene;
+
+	cerr << "Loading models" << endl;
+	vector<Obj> world;
+	for (auto& object_json : scene["scene"]){
 		Obj object;
-		loadTriangles(line + ".obj", object.triangles);
-		cerr << "loading sdf" << endl;
-		loadSDF(object.sdf, line + ".sdf");
-
+		string filepath = scene["models"][(string)object_json["name"]];
+		cerr << "Loading " << object_json << endl;
+		loadTriangles(filepath + ".obj", object.triangles);
+		loadSDF(filepath + ".sdf", object.sdf);
 		object.bounds = getBoundingVolume(object.triangles);
-		translateObj(object, translations[tt++]);
+		for (auto& el : object_json.items()){
+			if (el.key() == "translate"){
+				translateObj(
+					object,
+					vec3(
+						el.value()[0],
+						el.value()[1],
+						el.value()[2]
+					)
+				);
+			} else if (el.key() == "scale"){
+				scaleObj(object, el.value());
+			}
+		}
 
-		cout << object.bounds.min << ", " << object.bounds.max << endl;
+		cerr << "Generating hashmap" << endl;
 
-		cerr << "generating hashmap" << endl;
 		object.grid.resolution = object.sdf.resolution * sres_to_gres;
-		//walk around on barycentric coordinates of each triangle
-
 		int last = 0;
 		for (int i = 0;i < object.triangles.size();i++){
 			int percentage = (100 * (float)i / object.triangles.size());
@@ -621,14 +661,13 @@ int main(int argc, char **argv){
 				object.grid.map[*it].insert(tri);
 		}
 
-		cerr << "counting triangles" << endl;
 		int avg = 0;
 		int count = 0;
 		for (GridMap::iterator iter = object.grid.map.begin(); iter != object.grid.map.end(); ++iter){
 			avg += iter->second.size();
 			count++;
 		}
-		cerr << (avg / (float)count) << " triangles / cell (avg)"<< endl;
+		cerr << "Counted " << (avg / (float)count) << " triangles / cell (avg)"<< endl;
 		world.push_back(object);
 	}
 
