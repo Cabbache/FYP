@@ -15,10 +15,12 @@ endif()
 set(CMAKE_CXX_FLAGS_DEBUG "-g")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3 -march=native")
 
+find_package(SDL2 REQUIRED)
+find_package(OpenCV REQUIRED)
+
 add_executable(renderer main.cpp)
 add_executable(visualize_sdf visualize_sdf.cpp)
 
-find_package(OpenCV REQUIRED)
 if (OpenCV_FOUND)
 	include_directories( ${OpenCV_INCLUDE_DIRS} )
 	add_executable(ssim ssim.cpp)
@@ -28,3 +30,4 @@ else()
 endif()
 
 target_compile_features(renderer PRIVATE cxx_std_17)
+target_link_libraries(renderer ${SDL2_LIBRARIES})

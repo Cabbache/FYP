@@ -12,8 +12,8 @@
 #include <unordered_map>
 #include <unordered_set>
 
-//#include <SDL2/SDL.h>
-//#include <SDL2/SDL_image.h>
+#include <SDL2/SDL.h>
+#include <SDL2/SDL_image.h>
 
 #include "headers/argparse.hpp"
 #include "headers/json.hpp"
@@ -598,6 +598,45 @@ int main(int argc, char **argv){
 	auto aliasing_iters = renderer.get<int>("--antialiasing");
 	auto sceneFilePath = renderer.get<string>("--scene");
 
+//	if (SDL_Init(SDL_INIT_VIDEO) < 0){
+//		cerr << "Error initalising SDL" << SDL_GetError() << endl;
+//	}
+//
+//	SDL_Window *win = nullptr;
+//	SDL_Renderer *renderer_sdl = nullptr;
+//	SDL_Texture *img = nullptr;
+//
+//	win = SDL_CreateWindow(
+//		"View",
+//		SDL_WINDOWPOS_CENTERED,
+//		SDL_WINDOWPOS_CENTERED,
+//		300,
+//		300,
+//		0
+//	);
+//
+//	renderer_sdl = SDL_CreateRenderer(win, -1, SDL_RENDERER_ACCELERATED);
+//	img = SDL_CreateTexture(renderer_sdl, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, 300, 300);
+//
+//	unsigned char *pixels;
+//	int pitch;
+//	
+//	SDL_LockTexture(img, NULL, (void**)&pixels, &pitch);
+//	for (int i = 0;i < pitch * 300;i++){
+//		pixels[i] = 255;
+//	}
+//	SDL_UnlockTexture(img);
+//
+//	SDL_Rect texr;
+//	texr.x = 0;
+//	texr.y = 0;
+//	texr.w = 300;
+//	texr.h = 300;
+//	SDL_RenderClear(renderer_sdl);
+//	SDL_RenderCopy(renderer_sdl, img, NULL, &texr);
+//	SDL_RenderPresent(renderer_sdl);
+//	for (;;){}
+
 	const double angle = 1.0;
 	const double aspect = (double)image_width / image_height;
 
@@ -651,7 +690,6 @@ int main(int argc, char **argv){
 			//double b_res = 0.3 * object.grid.resolution / tri.p[1].length();
 			double a_res = 0.07;
 			double b_res = 0.07;
-			//cerr << a_res << ", " << b_res << endl;
 			for (double a = 0;a <= 1.0 + a_res;a+=a_res){
 				for (double b = 0;b <= 1.0 - min(1.0,a) + b_res;b+=b_res){
 					//clipping
@@ -713,7 +751,9 @@ int main(int argc, char **argv){
 		camera_origin = rotateY(camera_origin, angle_loop);
 
 		vec3 frame_topleft = vec3(-frame_width/2, frame_height/2, eye_frame_distance);
-		vec3 *image = new vec3[image_height*image_width];
+		
+		//vec3 *image = new vec3[image_height*image_width];
+		unsigned char *image = new unsigned char[image_width*image_height*4];
 		
 		cerr << "Starting timer" << endl;
 		auto start = std::chrono::system_clock::now();
@@ -734,7 +774,11 @@ int main(int argc, char **argv){
 					average += get_color(camera_origin, ray, world);
 				}
 				average /= aliasing_iters;
-				image[y*image_width + x] = average;
+				//image[y*image_width + x] = average;
+				image[4*(y*image_width + x) + 0] = average[0];
+				image[4*(y*image_width + x) + 1] = average[1];
+				image[4*(y*image_width + x) + 2] = average[2];
+				image[4*(y*image_width + x) + 4] = 1;
 			}
 		}
 		auto end = std::chrono::system_clock::now();
@@ -750,8 +794,12 @@ int main(int argc, char **argv){
 		cerr << "Writing image to file" << endl;
 
 		for (int i = 0;i < image_height*image_width;i++){
-			vec3 color = image[i];
-			ppm << (int)color[0] << " " << (int)color[1] << " " << (int)color[2] << endl;
+			for (int j = 0;j < 3;j++){
+				ppm << (int)image[4*i + j];
+				if (j != 2)
+					ppm << " ";
+			}
+			ppm << endl;
 		}
 		ppm.close();
 
