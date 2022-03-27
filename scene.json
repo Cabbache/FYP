@@ -7,6 +7,43 @@
 	},
 	"scene":[
 		{
+			"scale": 1.0,
+			"translate": [0,0,0],
+			"name": "bunny40k"
+		},
+		{
+			"scale": 1.0,
+			"translate": [0,0,1],
+			"name": "bunny40k"
+		},
+		{
+			"scale": 1.0,
+			"translate": [0,1,0],
+			"name": "bunny40k"
+		},
+		{
+			"scale": 1.0,
+			"translate": [0,1,1],
+			"name": "bunny40k"
+		},
+		{
+			"scale": 1.0,
+			"translate": [1,0,0],
+			"name": "bunny40k"
+		},
+		{
+			"scale": 1.0,
+			"translate": [1,0,1],
+			"name": "bunny40k"
+		},
+		{
+			"scale": 1.0,
+			"translate": [1,1,0],
+			"name": "bunny40k"
+		},
+		{
+			"scale": 1.0,
+			"translate": [1,1,1],
 			"name": "bunny40k"
 		}
 	]

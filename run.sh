@@ -11,11 +11,7 @@ function conversion(){
 
 set -e
 
-#compile
 ./compile.sh
-
-#allow bigger stack size, otherwise there will be segfault
-#ulimit -s unlimited
-
+rm img_*.ppm || :
 ./build/renderer -s scene.json
 conversion

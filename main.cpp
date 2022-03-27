@@ -525,6 +525,24 @@ Volume getBoundingVolume(const vector<Triangle> &triangles){
 	return Volume{min, max};
 }
 
+Volume getBoundingVolume(const vector<Obj> world){
+	vec3 min(
+		std::numeric_limits<double>::max(),
+		std::numeric_limits<double>::max(),
+		std::numeric_limits<double>::max()
+	);
+	vec3 max(
+		std::numeric_limits<double>::min(),
+		std::numeric_limits<double>::min(),
+		std::numeric_limits<double>::min()
+	);
+	for (const Obj &object : world){
+		min.min(object.bounds.min);
+		max.max(object.bounds.max);
+	}
+	return Volume{min, max};
+}
+
 //This does not translate the gridmap
 void translateObj(Obj &object, vec3 translation){
 	//shfit triangles
@@ -560,6 +578,78 @@ void scaleObj(Obj &object, double maxDimension){
 	for (int j = 0;j < object.sdf.dimensions[1];++j)
 	for (int k = 0;k < object.sdf.dimensions[2];++k)
 		object.sdf.values[i][j][k] *= scale;
+}
+
+void loadWorld(vector<Obj> &world, json &scene){
+	for (auto& object_json : scene["scene"]){
+		Obj object;
+		string filepath = scene["models"][(string)object_json["name"]];
+		cerr << "Loading " << object_json << endl;
+		loadTriangles(filepath + ".obj", object.triangles);
+		loadSDF(filepath + ".sdf", object.sdf);
+		object.bounds = getBoundingVolume(object.triangles);
+		cerr << "bounds: " << object.bounds.min << ", " << object.bounds.max << endl;
+		for (auto& el : object_json.items()){
+			if (el.key() == "translate"){
+				translateObj(
+					object,
+					vec3(
+						el.value()[0],
+						el.value()[1],
+						el.value()[2]
+					)
+				);
+			} else if (el.key() == "scale"){
+				scaleObj(object, el.value());
+			}
+		}
+
+		cerr << "Generating hashmap" << endl;
+
+		object.grid.resolution = object.sdf.resolution * sres_to_gres;
+		int last = 0;
+		for (int i = 0;i < object.triangles.size();i++){
+			int percentage = (100 * (float)i / object.triangles.size());
+			if (last != percentage && percentage && percentage % 20 == 0){
+				cerr << percentage << "%" << endl;
+				last = percentage;
+			}
+			Triangle tri = object.triangles.at(i);
+			set<vec3_int> points;
+			//double a_res = 0.3 * object.grid.resolution / tri.p[0].length();
+			//double b_res = 0.3 * object.grid.resolution / tri.p[1].length();
+			double a_res = 0.07;
+			double b_res = 0.07;
+			for (double a = 0;a <= 1.0 + a_res;a+=a_res){
+				for (double b = 0;b <= 1.0 - min(1.0,a) + b_res;b+=b_res){
+					//clipping
+					double a_c = min(1.0, a);
+					double b_c = min(1.0-a_c, b);
+					double c = 1.0 - a_c - b_c;
+
+					vec3_int point(
+							(
+								a_c*tri.p[0] +
+								b_c*tri.p[1] +
+								c*tri.p[2]
+							) / object.grid.resolution
+						);
+					points.insert(point);
+				}
+			}
+			for (set<vec3_int>::iterator it = points.begin();it != points.end();++it)
+				object.grid.map[*it].insert(tri);
+		}
+
+		int avg = 0;
+		int count = 0;
+		for (GridMap::iterator iter = object.grid.map.begin(); iter != object.grid.map.end(); ++iter){
+			avg += iter->second.size();
+			count++;
+		}
+		cerr << "Counted " << (avg / (float)count) << " triangles / cell (avg)"<< endl;
+		world.push_back(object);
+	}
 }
 
 int main(int argc, char **argv){
@@ -616,13 +706,13 @@ int main(int argc, char **argv){
 //	);
 //
 //	renderer_sdl = SDL_CreateRenderer(win, -1, SDL_RENDERER_ACCELERATED);
-//	img = SDL_CreateTexture(renderer_sdl, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, 300, 300);
+//	img = SDL_CreateTexture(renderer_sdl, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, image_width, image_height);
 //
 //	unsigned char *pixels;
 //	int pitch;
 //	
 //	SDL_LockTexture(img, NULL, (void**)&pixels, &pitch);
-//	for (int i = 0;i < pitch * 300;i++){
+//	for (int i = 0;i < pitch * image_height;i++){
 //		pixels[i] = 255;
 //	}
 //	SDL_UnlockTexture(img);
@@ -651,87 +741,26 @@ int main(int argc, char **argv){
 
 	cerr << "Loading models" << endl;
 	vector<Obj> world;
-	for (auto& object_json : scene["scene"]){
-		Obj object;
-		string filepath = scene["models"][(string)object_json["name"]];
-		cerr << "Loading " << object_json << endl;
-		loadTriangles(filepath + ".obj", object.triangles);
-		loadSDF(filepath + ".sdf", object.sdf);
-		object.bounds = getBoundingVolume(object.triangles);
-		cerr << "bounds: " << object.bounds.min << ", " << object.bounds.max << endl;
-		for (auto& el : object_json.items()){
-			if (el.key() == "translate"){
-				translateObj(
-					object,
-					vec3(
-						el.value()[0],
-						el.value()[1],
-						el.value()[2]
-					)
-				);
-			} else if (el.key() == "scale"){
-				scaleObj(object, el.value());
-			}
-		}
+	
+	loadWorld(world, scene);
+	Volume sceneBounds = getBoundingVolume(world);
 
-		cerr << "Generating hashmap" << endl;
-
-		object.grid.resolution = object.sdf.resolution * sres_to_gres;
-		int last = 0;
-		for (int i = 0;i < object.triangles.size();i++){
-			int percentage = (100 * (float)i / object.triangles.size());
-			if (last != percentage && percentage && percentage % 5 == 0){
-				cerr << percentage << "%" << endl;
-				last = percentage;
-			}
-			Triangle tri = object.triangles.at(i);
-			set<vec3_int> points;
-			//double a_res = 0.3 * object.grid.resolution / tri.p[0].length();
-			//double b_res = 0.3 * object.grid.resolution / tri.p[1].length();
-			double a_res = 0.07;
-			double b_res = 0.07;
-			for (double a = 0;a <= 1.0 + a_res;a+=a_res){
-				for (double b = 0;b <= 1.0 - min(1.0,a) + b_res;b+=b_res){
-					//clipping
-					double a_c = min(1.0, a);
-					double b_c = min(1.0-a_c, b);
-					double c = 1.0 - a_c - b_c;
-
-					vec3_int point(
-							(
-								a_c*tri.p[0] +
-								b_c*tri.p[1] +
-								c*tri.p[2]
-							) / object.grid.resolution
-						);
-					points.insert(point);
-				}
-			}
-			for (set<vec3_int>::iterator it = points.begin();it != points.end();++it)
-				object.grid.map[*it].insert(tri);
-		}
-
-		int avg = 0;
-		int count = 0;
-		for (GridMap::iterator iter = object.grid.map.begin(); iter != object.grid.map.end(); ++iter){
-			avg += iter->second.size();
-			count++;
-		}
-		cerr << "Counted " << (avg / (float)count) << " triangles / cell (avg)"<< endl;
-		world.push_back(object);
-	}
-
-	Obj object = world.at(0);
 	const double cam_distance = max(
 		max(
-			abs(object.bounds.min.x()),
-			abs(object.bounds.min.z())
+			abs(sceneBounds.min.x()),
+			abs(sceneBounds.min.z())
 		),
 		max(
-			abs(object.bounds.max.x()),
-			abs(object.bounds.max.z())
+			abs(sceneBounds.max.x()),
+			abs(sceneBounds.max.z())
 		)
 	) * 1.9;
+
+
+	//frame buffer
+	double frame_width = 1;
+	double frame_height = frame_width / aspect;
+	double eye_frame_distance = 1; //or focal length?
 
 	double total_duration = 0;
 	for (double angle_loop = 0;angle_loop < 360;angle_loop += angle){
@@ -742,12 +771,7 @@ int main(int argc, char **argv){
 		<< image_width << " " << image_height << endl
 		<< "255" << endl;
 
-		//frame buffer
-		double frame_width = 1;
-		double frame_height = frame_width / aspect;
-		double eye_frame_distance = 1; //or focal length?
-
-		vec3 camera_origin = vec3(0,0.5*(object.bounds.max.y() + object.bounds.min.y()),-cam_distance);
+		vec3 camera_origin = vec3(0,0.5*(sceneBounds.max.y() + sceneBounds.min.y()),-cam_distance);
 		camera_origin = rotateY(camera_origin, angle_loop);
 
 		vec3 frame_topleft = vec3(-frame_width/2, frame_height/2, eye_frame_distance);
