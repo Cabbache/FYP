@@ -159,4 +159,13 @@ inline vec3 rotateY(vec3 v, double degrees){
 	);
 }
 
+inline vec3 rotateX(vec3 v, double degrees){
+	double radians = 3.1415926535 * degrees / 180;
+	return vec3(
+		v.e[0],
+		v.e[1] * cos(radians) - v.e[2] * sin(radians),
+		v.e[1] * sin(radians) + v.e[2] * cos(radians)
+	);
+}
+
 #endif

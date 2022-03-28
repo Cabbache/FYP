@@ -13,7 +13,7 @@ set -e
 
 ./compile.sh
 rm img_*.ppm || :
-if [ "$1" -eq "fast" ]
+if [[ "$1" == "fast" ]]
 then
 	./build/renderer -s scene.json -w 300 -h 300 -d 0.5 -a 1
 else

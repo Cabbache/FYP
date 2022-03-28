@@ -771,16 +771,17 @@ int main(int argc, char **argv){
 	unsigned char *image;
 	SDL_Texture *img = nullptr;
 	img = SDL_CreateTexture(renderer_sdl, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, image_width, image_height);
-		int pitch;
-	for (double angle_loop = 0;angle_loop < 360;angle_loop += angle){
-		vec3 camera_origin = vec3(0,0.5*(sceneBounds.max.y() + sceneBounds.min.y()),-cam_distance);
-		camera_origin = rotateY(camera_origin, angle_loop);
+	int pitch;
+
+	vec3 camera_origin = vec3(0,0.5*(sceneBounds.max.y() + sceneBounds.min.y()),-cam_distance);
+	vec3 camera_ray = vec3(0.01,0,0);
+
+	int rotY = 0;
+	int rotX = 0;
+	while (1){
 
 		SDL_LockTexture(img, NULL, (void**)&image, &pitch);
-		cerr << "pitch = " << pitch << endl;
 		
-		cerr << "Starting timer" << endl;
-		auto start = std::chrono::system_clock::now();
 		#pragma omp parallel for num_threads(64)
 		for (int y = 0;y < image_height;y++){
 			for (int x = 0;x < image_width;x++){
@@ -793,7 +794,8 @@ int main(int argc, char **argv){
 						-frame_height * ((y+drand()) / (double)image_height),
 						0
 					);
-					ray = rotateY(ray, angle_loop);
+					ray = rotateX(rotateY(ray, rotY), rotX);
+					//ray = rotateY(ray, rotY);
 					average += get_color(camera_origin, ray, world);
 				}
 				average /= aliasing_iters;
@@ -803,37 +805,34 @@ int main(int argc, char **argv){
 				image[4*(y*image_width + x) + 3] = average[0];
 			}
 		}
-		auto end = std::chrono::system_clock::now();
-		std::chrono::duration<double> elapsed_seconds = end-start;
-		cerr << "duration: " << elapsed_seconds.count() << endl;
-		total_duration += elapsed_seconds.count();
-		cerr << "march time: " << (100.0 * total_marchtime / elapsed_seconds.count()) << "%" << endl;
-		cerr << total_cells / (double)total_hits << " blocks / hit " << endl;
-		total_marchtime = 0.0;
-		total_cells = 0;
-		total_hits = 0;
-		
-		if (0){
-			cerr << "Writing image to file" << endl;
-			ofstream ppm("img_"+to_string(int(angle_loop))+".ppm");
-			ppm << "P3" << endl
-			<< image_width << " " << image_height << endl
-			<< "255" << endl;
-			for (int i = 0;i < image_height*image_width;i++){
-				ppm
-				<< (int)image[4*i + 3] << " "
-				<< (int)image[4*i + 2] << " "
-				<< (int)image[4*i + 1] << endl;
-			}
-			ppm.close();
-		}
 
-		SDL_Event e;
-		if (SDL_PollEvent(&e)){
-			if (e.type == SDL_QUIT)
-				return 1;
-			else if (e.type == SDL_KEYUP && e.key.keysym.sym == SDLK_ESCAPE)
-				return 1;
+		SDL_Event event;
+		while (SDL_PollEvent(&event)){
+			switch (event.type){
+				case SDL_QUIT:
+					return 1;
+				case SDL_KEYDOWN:
+					switch (event.key.keysym.scancode){
+						case SDL_SCANCODE_W:
+							camera_origin += rotateX(rotateY(vec3(0,0,0.02), rotY), rotX);
+							break;
+						case SDL_SCANCODE_S:
+							camera_origin += rotateX(rotateY(vec3(0,0,-0.02), rotY), rotX);
+							break;
+						case SDL_SCANCODE_A:
+							rotY--;
+							break;
+						case SDL_SCANCODE_D:
+							rotY++;
+							break;
+						case SDL_SCANCODE_UP:
+							rotX--;
+							break;
+						case SDL_SCANCODE_DOWN:
+							rotX++;
+							break;
+					}
+			}
 		}
 
 		SDL_UnlockTexture(img);
