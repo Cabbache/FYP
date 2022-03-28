@@ -40,6 +40,15 @@ typedef struct hitInfo{
 	double gamma;
 } hitInfo;
 
+typedef struct boxHitInfo{
+	vec3 ray;
+	vec3 origin;
+
+	bool hit;
+	double tmin;
+	double tmax;
+} boxHitInfo;
+
 typedef struct Triangle{
 	vec3 p[3];
 	bool reflective;
@@ -278,8 +287,8 @@ void marchSDF(const SDF &sdf, hitInfo &info){
 	vec3 p;
 	info.hit = false;
 	for (p = info.origin;getValue(sdf, p, sres);p += info.ray*abs(sres.value)){
-		//if (abs(sres.value) <= sdf.resolution/2){
-		if (sres.value <= sdf.resolution/2){
+		if (abs(sres.value) <= sdf.resolution){
+		//if (sres.value <= sdf.resolution/2){
 		//if (sres.value <= 0){
 			info.hit = true;
 			info.t = (p-info.origin).length();
@@ -288,7 +297,7 @@ void marchSDF(const SDF &sdf, hitInfo &info){
 	}
 }
 
-void boxHit(hitInfo &info, const Volume &box){
+void boxHit(boxHitInfo &info, const Volume &box){
 	float tmin = (box.min.x() - info.origin.x()) / info.ray.x(); 
 	float tmax = (box.max.x() - info.origin.x()) / info.ray.x(); 
 
@@ -339,7 +348,8 @@ void boxHit(hitInfo &info, const Volume &box){
 		tmax = tzmax; 
 
 	info.hit = true;
-	info.t = tmin;
+	info.tmin = tmin;
+	info.tmax = tmax;
 }
 
 vec3 get_color(vec3 origin, vec3 ray, const vector<Obj> &world, int depth=0){
@@ -359,15 +369,17 @@ vec3 get_color(vec3 origin, vec3 ray, const vector<Obj> &world, int depth=0){
 	vector<Ohd> boxes_hit;
 	
 	for (auto it = world.begin(); it != world.end(); ++it){
-		hitInfo boxintersect = {
+		boxHitInfo bhi = {
 			ray,
 			origin,
-			false,
-			0,
+			false
 		};
-		boxHit(boxintersect, it->bounds);
-		if (boxintersect.hit)
-			boxes_hit.push_back(make_pair(&(*it), boxintersect.t));
+		boxHit(bhi, it->bounds);
+		if (bhi.hit && !(bhi.tmin < 0 && bhi.tmax < 0)){
+			if (bhi.tmin < 0)
+				bhi.tmin = 0; //if inside box, start from origin (origin + ray*0)
+			boxes_hit.push_back(make_pair(&(*it), bhi.tmin));
+		}
 	}
 
 	//order boxes by their distance from ray origin
@@ -457,7 +469,7 @@ vec3 get_color(vec3 origin, vec3 ray, const vector<Obj> &world, int depth=0){
 			#ifdef OPT_HIT_ONCE
 				break;
 			#else
-				march_origin = hitpoint_world + march.ray*ohd.first->sdf.resolution*2; //this constant important
+				march_origin = hitpoint_world + march.ray*ohd.first->sdf.resolution*0.2; //this constant important
 			#endif
 		}
 		end_iter:;
@@ -493,15 +505,15 @@ vec3 get_color(vec3 origin, vec3 ray, const vector<Obj> &world, int depth=0){
 		return vec3(0,0,0);
 	
 	//color the non mirror triangle
-	vec3 color = unit_vector(
-		vec3(
-			(hitpoint - closestTri.p[0]).length(),
-			(hitpoint - closestTri.p[1]).length(),
-			(hitpoint - closestTri.p[2]).length()
-		)
-	)*255;
+//	vec3 color = unit_vector(
+//		vec3(
+//			(hitpoint - closestTri.p[0]).length(),
+//			(hitpoint - closestTri.p[1]).length(),
+//			(hitpoint - closestTri.p[2]).length()
+//		)
+//	)*255;
+	vec3 color(127 * ((unit_vector(hitpoint - (world[0].bounds.min + world[0].bounds.max) / 2)) + vec3(1,1,1)));
 	return color;
-	//vec3 color(127 * ((unit_vector(hitpoint - (obj.bounds.min + obj.bounds.max) / 2)) + vec3(1,1,1)));
 	//return vec3(color.z(), color.x(), color.y());
 }
 
@@ -682,6 +694,10 @@ int main(int argc, char **argv){
 		.scan<'d', int>()
 		.default_value(8)
 		.help("Number of threads");
+	renderer.add_argument("-d", "--distance")
+		.scan<'g', double>()
+		.default_value(1.9)
+		.help("Camera distance");
 	
 	try{
 		renderer.parse_args(argc, argv);
@@ -742,7 +758,7 @@ int main(int argc, char **argv){
 			abs(sceneBounds.max.x()),
 			abs(sceneBounds.max.z())
 		)
-	) * 1.9;
+	) * renderer.get<double>("--distance");
 
 	//frame buffer
 	double frame_width = 1;
