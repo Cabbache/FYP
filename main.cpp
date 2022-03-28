@@ -781,7 +781,7 @@ int main(int argc, char **argv){
 		
 		cerr << "Starting timer" << endl;
 		auto start = std::chrono::system_clock::now();
-		#pragma omp parallel for num_threads(8)
+		#pragma omp parallel for num_threads(64)
 		for (int y = 0;y < image_height;y++){
 			for (int x = 0;x < image_width;x++){
 				vec3 average(0,0,0);
