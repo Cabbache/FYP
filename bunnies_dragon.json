@@ -9,42 +9,42 @@
 		{
 			"scale": 0.3,
 			"translate": [0,0,0],
-			"name": "bunny40k"
+			"name": "bunny1k"
 		},
 		{
 			"scale": 0.4,
 			"translate": [0,0,1],
-			"name": "bunny40k"
+			"name": "bunny1k"
 		},
 		{
 			"scale": 0.5,
 			"translate": [0,1,0],
-			"name": "bunny40k"
+			"name": "bunny1k"
 		},
 		{
 			"scale": 0.6,
 			"translate": [0,1,1],
-			"name": "bunny40k"
+			"name": "bunny1k"
 		},
 		{
 			"scale": 0.7,
 			"translate": [1,0,0],
-			"name": "bunny40k"
+			"name": "bunny1k"
 		},
 		{
 			"scale": 0.8,
 			"translate": [1,0,1],
-			"name": "bunny40k"
+			"name": "bunny1k"
 		},
 		{
 			"scale": 0.9,
 			"translate": [1,1,0],
-			"name": "bunny40k"
+			"name": "bunny1k"
 		},
 		{
 			"scale": 1.0,
 			"translate": [1,1,1],
-			"name": "bunny40k"
+			"name": "bunny1k"
 		},
 		{
 			"scale": 2.0,

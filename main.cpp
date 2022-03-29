@@ -505,14 +505,14 @@ vec3 get_color(vec3 origin, vec3 ray, const vector<Obj> &world, int depth=0){
 		return vec3(0,0,0);
 	
 	//color the non mirror triangle
-//	vec3 color = unit_vector(
-//		vec3(
-//			(hitpoint - closestTri.p[0]).length(),
-//			(hitpoint - closestTri.p[1]).length(),
-//			(hitpoint - closestTri.p[2]).length()
-//		)
-//	)*255;
-	vec3 color(127 * ((unit_vector(hitpoint - (world[0].bounds.min + world[0].bounds.max) / 2)) + vec3(1,1,1)));
+	vec3 color = unit_vector(
+		vec3(
+			(hitpoint - closestTri.p[0]).length(),
+			(hitpoint - closestTri.p[1]).length(),
+			(hitpoint - closestTri.p[2]).length()
+		)
+	)*255;
+	//vec3 color(127 * ((unit_vector(hitpoint - (world[0].bounds.min + world[0].bounds.max) / 2)) + vec3(1,1,1)));
 	return color;
 	//return vec3(color.z(), color.x(), color.y());
 }
