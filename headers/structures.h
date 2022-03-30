@@ -8,17 +8,6 @@
 
 using namespace std;
 
-typedef struct hitInfo{
-	vec3 ray;
-	vec3 origin;
-
-	bool hit;
-	double t;
-
-	double beta;
-	double gamma;
-} hitInfo;
-
 typedef struct boxHitInfo{
 	vec3 ray;
 	vec3 origin;
@@ -46,6 +35,18 @@ typedef struct Triangle{
 
 } Triangle;
 
+typedef struct hitInfo{
+	vec3 ray;
+	vec3 origin;
+
+	bool hit;
+	double t;
+	Triangle tri;
+
+	double beta;
+	double gamma;
+} hitInfo;
+
 typedef unordered_map<vec3_int, unordered_set<Triangle, Triangle::HashFunction>, hashFuncVec, equalsFunc> GridMap;
 
 typedef struct Volume{
@@ -61,14 +62,88 @@ typedef struct SDF{
 	double ***values;
 } SDF;
 
+////////////////////////////////////////////////////
+// const.
+////////////////////////////////////////////////////
+
+const float KD_TREE_EPSILON = 0.00001f;
+
+////////////////////////////////////////////////////
+// enums.
+////////////////////////////////////////////////////
+
+enum SplitAxis {
+	X_AXIS = 0,
+	Y_AXIS = 1,
+	Z_AXIS = 2
+};
+
+enum AABBFace {
+	LEFT = 0,
+	FRONT = 1,
+	RIGHT = 2,
+	BACK = 3,
+	TOP = 4,
+	BOTTOM = 5
+};
+
+////////////////////////////////////////////////////
+// structs.
+////////////////////////////////////////////////////
+
+struct Ray
+{
+	vec3 origin;
+	vec3 dir;
+};
+
+
+////////////////////////////////////////////////////
+// classes.
+////////////////////////////////////////////////////
+
+class KDTreeNode
+{
+public:
+	KDTreeNode( void );
+	~KDTreeNode( void );
+
+	Volume bbox;
+	KDTreeNode *left;
+	KDTreeNode *right;
+	int num_tris;
+	int *tri_indices;
+
+	SplitAxis split_plane_axis;
+	float split_plane_value;
+
+	bool is_leaf_node;
+
+	// One rope for each face of the AABB encompassing the triangles in a node.
+	KDTreeNode *ropes[6];
+
+	int id;
+
+	bool isPointToLeftOfSplittingPlane( const vec3 &p ) const;
+	KDTreeNode* getNeighboringNode( vec3 p );
+
+	// Debug method.
+	void prettyPrint( void );
+};
+
+//#include "KDTreeCPU.h"
+class KDTreeCPU;
+
 typedef struct Obj{
 	Volume bounds;
+	KDTreeCPU *kdtree;
 	SDF sdf;
 	struct {
 		double resolution;
 		GridMap map;
 	} grid;
 } Obj;
+
 
 //used for the function that returns sdf value given world coordinate
 //if world coordinate is outside sdf domain, inside = false
@@ -78,5 +153,4 @@ typedef struct SDFResult{
 } SDFResult;
 
 typedef pair<const Obj*, double> Ohd;
-
 #endif

@@ -18,7 +18,6 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O3 -march=native")
 find_package(SDL2 REQUIRED)
 find_package(OpenCV REQUIRED)
 
-add_executable(renderer main.cpp)
 add_executable(visualize_sdf visualize_sdf.cpp)
 
 if (OpenCV_FOUND)
@@ -29,6 +28,7 @@ else()
 	message("OpenCV not found")
 endif()
 
+add_executable(renderer main.cpp headers/KDTreeCPU.cpp headers/mesh.cpp headers/KDTreeNode.cpp)
 target_compile_features(renderer PRIVATE cxx_std_17)
 target_link_libraries(renderer ${SDL2_LIBRARIES})
 

@@ -19,11 +19,12 @@
 #include "headers/vec3.h"
 #include "headers/tiny_obj_loader.h"
 #include "headers/BVH.hpp"
+#include "headers/KDTreeCPU.h"
+#include "headers/mesh.h"
 
 using namespace std;
 using namespace nlohmann;
 
-double total_marchtime = 0;
 const double sres_to_gres = 3;
 
 uint32_t total_cells = 0;
@@ -262,88 +263,100 @@ vec3 get_color(vec3 origin, vec3 ray, const vector<Obj> &world, int depth=0){
 	);
 
 	for (Ohd ohd: boxes_hit){
-		vec3 march_origin = origin + (ohd.second * ray); //start marching from ray box intersection
-		while (!closest.hit){
-			hitInfo march = {
-				ray,
-				march_origin,
-				false,
-				0,
-			};
+		if (ohd.first->kdtree == nullptr){
+			vec3 march_origin = origin + (ohd.second * ray); //start marching from ray box intersection
+			while (!closest.hit){
+				hitInfo march = {
+					ray,
+					march_origin,
+					false,
+					0,
+				};
 
-			auto start = std::chrono::system_clock::now();
-			marchSDF(ohd.first->sdf, march);
-			auto end = std::chrono::system_clock::now();
-			std::chrono::duration<double> elapsed_seconds = end-start;
-			total_marchtime += elapsed_seconds.count();
+				auto start = std::chrono::system_clock::now();
+				marchSDF(ohd.first->sdf, march);
+				auto end = std::chrono::system_clock::now();
+				std::chrono::duration<double> elapsed_seconds = end-start;
 
-			if (!march.hit)
-				break;
+				if (!march.hit)
+					break;
 
-			vec3 hitpoint_world(march.origin + (march.ray * march.t));
-			vec3_int hitpoint_grid(hitpoint_world / ohd.first->grid.resolution);
+				vec3 hitpoint_world(march.origin + (march.ray * march.t));
+				vec3_int hitpoint_grid(hitpoint_world / ohd.first->grid.resolution);
 
-			//make a list of cells that need to be checked
-			set<vec3_int> points;
-			points.insert(hitpoint_grid); //make this first to start checking from this cell
-			#ifdef OPT_CHECK_ONCE
-				const int neighbours = 0;
-			#else
-				const int neighbours = 1;
-			#endif
-			for (int a = -neighbours;a <= neighbours;a++)
-			for (int b = -neighbours;b <= neighbours;b++)
-			for (int c = -neighbours;c <= neighbours;c++){
-				if (abs(a) + abs(b) + abs(c) != 1)
-					continue;
-				points.insert(
-					vec3_int(
-						(
-							hitpoint_world + vec3(
-								a*ohd.first->sdf.resolution*0.25, //0.25 is close to the magic number for sres_to_gres = 3
-								b*ohd.first->sdf.resolution*0.25,
-								c*ohd.first->sdf.resolution*0.25
-							)
-						) / ohd.first->grid.resolution
-					)
-				);
-			}
-
-			total_hits++;
-
-			//iterate on the cells added previously
-			for (set<vec3_int>::iterator it = points.begin();it != points.end();++it){
-				if (ohd.first->grid.map.count(*it) != 1) //ignore if cell is not inside grid
-					continue;
-				total_cells++;
-				//iterate on triangles in the cell
-				for (Triangle tri : ohd.first->grid.map.at(*it)){
-					hitInfo check = {
-						ray,
-						origin,
-						false,
-						0.0f
-					};
-					triHit(tri, check);
-					if (!check.hit)
+				//make a list of cells that need to be checked
+				set<vec3_int> points;
+				points.insert(hitpoint_grid); //make this first to start checking from this cell
+				#ifdef OPT_CHECK_ONCE
+					const int neighbours = 0;
+				#else
+					const int neighbours = 1;
+				#endif
+				for (int a = -neighbours;a <= neighbours;a++)
+				for (int b = -neighbours;b <= neighbours;b++)
+				for (int c = -neighbours;c <= neighbours;c++){
+					if (abs(a) + abs(b) + abs(c) != 1)
 						continue;
-					
-					closest = check;
-					closestTri = tri;
-
-					//There is no depth test
-
-					goto end_iter;
+					points.insert(
+						vec3_int(
+							(
+								hitpoint_world + vec3(
+									a*ohd.first->sdf.resolution*0.25, //0.25 is close to the magic number for sres_to_gres = 3
+									b*ohd.first->sdf.resolution*0.25,
+									c*ohd.first->sdf.resolution*0.25
+								)
+							) / ohd.first->grid.resolution
+						)
+					);
 				}
+
+				total_hits++;
+
+				//iterate on the cells added previously
+				for (set<vec3_int>::iterator it = points.begin();it != points.end();++it){
+					if (ohd.first->grid.map.count(*it) != 1) //ignore if cell is not inside grid
+						continue;
+					total_cells++;
+					//iterate on triangles in the cell
+					for (Triangle tri : ohd.first->grid.map.at(*it)){
+						hitInfo check = {
+							ray,
+							origin,
+							false,
+							0.0f
+						};
+						triHit(tri, check);
+						if (!check.hit)
+							continue;
+						
+						closest = check;
+						closestTri = tri;
+
+						//There is no depth test
+
+						goto end_iter;
+					}
+				}
+				#ifdef OPT_HIT_ONCE
+					break;
+				#else
+					march_origin = hitpoint_world + march.ray*ohd.first->sdf.resolution*0.2; //this constant important
+				#endif
 			}
-			#ifdef OPT_HIT_ONCE
-				break;
-			#else
-				march_origin = hitpoint_world + march.ray*ohd.first->sdf.resolution*0.2; //this constant important
-			#endif
+		} else {
+			hitInfo hitinfo{
+				ray,
+				origin,
+				false
+			};
+			vec3 hitpoint;
+			ohd.first->kdtree->intersect(hitinfo, hitpoint);
+			closest = hitinfo;
+			closestTri = hitinfo.tri;
+			closestTri.reflective = false;
 		}
-		end_iter:;
 	}
+	end_iter:;
 	//if no triangles hit, color the background
 	if (!closest.hit){
 		vec3 pp = 127*(unit_vector(ray)+vec3(1,1,1));
@@ -461,78 +474,94 @@ void scaleObj(Obj &object, vector<Triangle> &triangles, double maxDimension){
 		object.sdf.values[i][j][k] *= scale;
 }
 
+void loadKDTree(Obj &object, string inputfile){
+	mesh msh(inputfile);
+	object.kdtree = new KDTreeCPU(
+		msh.numTris,
+		msh.tris,
+		msh.numVerts,
+		msh.verts
+	);
+	object.bounds = msh.bb;
+}
+
 void loadWorld(vector<Obj> &world, json &scene){
 	for (auto& object_json : scene["scene"]){
 		Obj object;
+		object.kdtree = nullptr;
 		string filepath = scene["models"][(string)object_json["name"]];
 		cerr << "Loading " << object_json << endl;
-		vector<Triangle> triangles;
-		loadTriangles(filepath + ".obj", triangles);
-		loadSDF(filepath + ".sdf", object.sdf);
-		object.bounds = getBoundingVolume(triangles);
-		for (auto& el : object_json.items()){
-			if (el.key() == "translate"){
-				translateObj(
-					object,
-					triangles,
-					vec3(
-						el.value()[0],
-						el.value()[1],
-						el.value()[2]
-					)
-				);
-			} else if (el.key() == "scale"){
-				scaleObj(
-					object,
-					triangles,
-					el.value()
-				);
-			}
-		}
-		cerr << "bounds: " << object.bounds.min << ", " << object.bounds.max << endl;
-		cerr << "Generating hashmap" << endl;
-		object.grid.resolution = object.sdf.resolution * sres_to_gres;
-		int last = 0;
-		for (int i = 0;i < triangles.size();i++){
-			int percentage = (100 * (float)i / triangles.size());
-			if (last != percentage && percentage && percentage % 20 == 0){
-				cerr << percentage << "%" << endl;
-				last = percentage;
-			}
-			Triangle tri = triangles.at(i);
-			set<vec3_int> points;
-			//double a_res = 0.3 * object.grid.resolution / tri.p[0].length();
-			//double b_res = 0.3 * object.grid.resolution / tri.p[1].length();
-			double a_res = 0.07;
-			double b_res = 0.07;
-			for (double a = 0;a <= 1.0 + a_res;a+=a_res){
-				for (double b = 0;b <= 1.0 - min(1.0,a) + b_res;b+=b_res){
-					//clipping
-					double a_c = min(1.0, a);
-					double b_c = min(1.0-a_c, b);
-					double c = 1.0 - a_c - b_c;
-
-					vec3_int point(
-							(
-								a_c*tri.p[0] +
-								b_c*tri.p[1] +
-								c*tri.p[2]
-							) / object.grid.resolution
-						);
-					points.insert(point);
+		if (object_json["mode"] == "kdtree"){
+			loadKDTree(object, filepath+".obj");
+		} else {
+			vector<Triangle> triangles;
+			loadTriangles(filepath + ".obj", triangles);
+			loadSDF(filepath + ".sdf", object.sdf);
+			object.bounds = getBoundingVolume(triangles);
+			for (auto& el : object_json.items()){
+				if (el.key() == "translate"){
+					translateObj(
+						object,
+						triangles,
+						vec3(
+							el.value()[0],
+							el.value()[1],
+							el.value()[2]
+						)
+					);
+				} else if (el.key() == "scale"){
+					scaleObj(
+						object,
+						triangles,
+						el.value()
+					);
 				}
 			}
-			for (set<vec3_int>::iterator it = points.begin();it != points.end();++it)
-				object.grid.map[*it].insert(tri);
-		}
+			cerr << "Generating hashmap" << endl;
+			object.grid.resolution = object.sdf.resolution * sres_to_gres;
+			int last = 0;
+			for (int i = 0;i < triangles.size();i++){
+				int percentage = (100 * (float)i / triangles.size());
+				if (last != percentage && percentage && percentage % 20 == 0){
+					cerr << percentage << "%" << endl;
+					last = percentage;
+				}
+				Triangle tri = triangles.at(i);
+				set<vec3_int> points;
+				//double a_res = 0.3 * object.grid.resolution / tri.p[0].length();
+				//double b_res = 0.3 * object.grid.resolution / tri.p[1].length();
+				double a_res = 0.07;
+				double b_res = 0.07;
+				for (double a = 0;a <= 1.0 + a_res;a+=a_res){
+					for (double b = 0;b <= 1.0 - min(1.0,a) + b_res;b+=b_res){
+						//clipping
+						double a_c = min(1.0, a);
+						double b_c = min(1.0-a_c, b);
+						double c = 1.0 - a_c - b_c;
 
-		int avg = 0;
-		int count = 0;
-		for (GridMap::iterator iter = object.grid.map.begin(); iter != object.grid.map.end(); ++iter){
-			avg += iter->second.size();
-			count++;
+						vec3_int point(
+								(
+									a_c*tri.p[0] +
+									b_c*tri.p[1] +
+									c*tri.p[2]
+								) / object.grid.resolution
+							);
+						points.insert(point);
+					}
+				}
+				for (set<vec3_int>::iterator it = points.begin();it != points.end();++it)
+					object.grid.map[*it].insert(tri);
+			}
+
+			int avg = 0;
+			int count = 0;
+			for (GridMap::iterator iter = object.grid.map.begin(); iter != object.grid.map.end(); ++iter){
+				avg += iter->second.size();
+				count++;
+			}
+			cerr << "Counted " << (avg / (float)count) << " triangles / cell (avg)"<< endl;
 		}
-		cerr << "Counted " << (avg / (float)count) << " triangles / cell (avg)"<< endl;
+		cerr << "bounds: " << object.bounds.min << ", " << object.bounds.max << endl;
 		world.push_back(object);
 	}
 }
@@ -620,6 +649,7 @@ int main(int argc, char **argv){
 	vector<Obj> world;
 	
 	loadWorld(world, scene);
+	//loadWorldKD(world, scene);
 	//cerr << "building bvh" << endl;
 	//BVH bvh(world);
 	//cerr << "deallocating world" << endl;
@@ -647,8 +677,6 @@ int main(int argc, char **argv){
 	double eye_frame_distance = 1; //or focal length?
 	vec3 frame_topleft = vec3(-frame_width/2, frame_height/2, eye_frame_distance);
 
-	double total_duration = 0;
-
 	unsigned char *image;
 	SDL_Texture *img = nullptr;
 	img = SDL_CreateTexture(renderer_sdl, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, image_width, image_height);
@@ -660,10 +688,11 @@ int main(int argc, char **argv){
 	int rotY = 0;
 	int rotX = 0;
 	while (1){
+		auto startFrame = std::chrono::system_clock::now();
 
 		SDL_LockTexture(img, NULL, (void**)&image, &pitch);
 		
-		#pragma omp parallel for num_threads(1)
+		#pragma omp parallel for num_threads(64)
 		for (int y = 0;y < image_height;y++){
 			for (int x = 0;x < image_width;x++){
 				vec3 average(0,0,0);
@@ -727,7 +756,10 @@ int main(int argc, char **argv){
 		SDL_RenderClear(renderer_sdl);
 		SDL_RenderCopy(renderer_sdl, img, NULL, &texr);
 		SDL_RenderPresent(renderer_sdl);
+
+		auto endFrame = std::chrono::system_clock::now();
+		std::chrono::duration<double> elapsed_seconds = endFrame-startFrame;
+		cerr << "fps: " << 1. / elapsed_seconds.count() << endl;
 	}
-	cerr << "total duration: " << total_duration << endl;
 	return 0;
 }
