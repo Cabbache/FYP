@@ -9,16 +9,16 @@
 #include <set>
 #include <limits>
 #include <algorithm>
-#include <unordered_map>
-#include <unordered_set>
 
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
 
+#include "headers/structures.h"
 #include "headers/argparse.hpp"
 #include "headers/json.hpp"
 #include "headers/vec3.h"
 #include "headers/tiny_obj_loader.h"
+#include "headers/BVH.hpp"
 
 using namespace std;
 using namespace nlohmann;
@@ -28,78 +28,6 @@ const double sres_to_gres = 3;
 
 uint32_t total_cells = 0;
 uint32_t total_hits = 0;
-
-typedef struct hitInfo{
-	vec3 ray;
-	vec3 origin;
-
-	bool hit;
-	double t;
-
-	double beta;
-	double gamma;
-} hitInfo;
-
-typedef struct boxHitInfo{
-	vec3 ray;
-	vec3 origin;
-
-	bool hit;
-	double tmin;
-	double tmax;
-} boxHitInfo;
-
-typedef struct Triangle{
-	vec3 p[3];
-	bool reflective;
-
-	bool operator==(const Triangle& triangle) const{
-		return p[0] == triangle.p[0] && p[1] == triangle.p[1] && p[2] == triangle.p[2];
-	}
-
-	struct HashFunction{
-		size_t operator()(const Triangle& triangle) const
-    {
-			hashFuncVec hfv;
-			return hfv(triangle.p[0]) ^ hfv(triangle.p[1]) ^ hfv(triangle.p[2]);
-    }
-	};
-
-} Triangle;
-
-typedef unordered_map<vec3_int, unordered_set<Triangle, Triangle::HashFunction>, hashFuncVec, equalsFunc> GridMap;
-
-typedef struct Volume{
-	vec3 min;
-	vec3 max;
-} Volume;
-
-typedef struct SDF{
-	vec3 origin;
-	vec3 corner;
-	vec3 dimensions;
-	double resolution;
-	double ***values;
-} SDF;
-
-typedef struct Obj{
-	vector<Triangle> triangles;
-	Volume bounds;
-	SDF sdf;
-	struct {
-		double resolution;
-		GridMap map;
-	} grid;
-} Obj;
-
-//used for the function that returns sdf value given world coordinate
-//if world coordinate is outside sdf domain, inside = false
-typedef struct SDFResult{
-	bool inside;
-	double value;
-} SDFResult;
-
-typedef pair<const Obj*, double> Ohd;
 
 //maps world coordinates to sdf coordinates and returns value of sdf
 bool getValue(const SDF &sdf, const vec3 &world, SDFResult &res){
@@ -297,61 +225,6 @@ void marchSDF(const SDF &sdf, hitInfo &info){
 	}
 }
 
-void boxHit(boxHitInfo &info, const Volume &box){
-	float tmin = (box.min.x() - info.origin.x()) / info.ray.x(); 
-	float tmax = (box.max.x() - info.origin.x()) / info.ray.x(); 
-
-	if (tmin > tmax) {
-		float tmp = tmin;
-		tmin = tmax;
-		tmax = tmp;
-	}
-
-	float tymin = (box.min.y() - info.origin.y()) / info.ray.y(); 
-	float tymax = (box.max.y() - info.origin.y()) / info.ray.y(); 
-
-	if (tymin > tymax) {
-		float tmp = tymin;
-		tymin = tymax;
-		tymax = tmp;
-	}
-
-	if ((tmin > tymax) || (tymin > tmax)) {
-		info.hit = false;
-		return;
-	}
-
-	if (tymin > tmin) 
-		tmin = tymin; 
-
-	if (tymax < tmax) 
-		tmax = tymax; 
-
-	float tzmin = (box.min.z() - info.origin.z()) / info.ray.z(); 
-	float tzmax = (box.max.z() - info.origin.z()) / info.ray.z();
-
-	if (tzmin > tzmax){
-		float tmp = tzmin;
-		tzmin = tzmax;
-		tzmax = tmp;
-	}
-
-	if ((tmin > tzmax) || (tzmin > tmax)) {
-		info.hit = false;
-		return;
-	}
-
-	if (tzmin > tmin) 
-		tmin = tzmin; 
-
-	if (tzmax < tmax) 
-		tmax = tzmax; 
-
-	info.hit = true;
-	info.tmin = tmin;
-	info.tmax = tmax;
-}
-
 vec3 get_color(vec3 origin, vec3 ray, const vector<Obj> &world, int depth=0){
 	//sometimes rays get stuck inside the 3d model
 	if (depth > 40)
@@ -367,19 +240,16 @@ vec3 get_color(vec3 origin, vec3 ray, const vector<Obj> &world, int depth=0){
 	};
 
 	vector<Ohd> boxes_hit;
-	
+
 	for (auto it = world.begin(); it != world.end(); ++it){
 		boxHitInfo bhi = {
 			ray,
 			origin,
 			false
 		};
-		boxHit(bhi, it->bounds);
-		if (bhi.hit && !(bhi.tmin < 0 && bhi.tmax < 0)){
-			if (bhi.tmin < 0)
-				bhi.tmin = 0; //if inside box, start from origin (origin + ray*0)
+		BVH::boxHit(bhi, it->bounds);
+		if (bhi.hit)
 			boxes_hit.push_back(make_pair(&(*it), bhi.tmin));
-		}
 	}
 
 	//order boxes by their distance from ray origin
@@ -474,7 +344,6 @@ vec3 get_color(vec3 origin, vec3 ray, const vector<Obj> &world, int depth=0){
 		}
 		end_iter:;
 	}
-
 	//if no triangles hit, color the background
 	if (!closest.hit){
 		vec3 pp = 127*(unit_vector(ray)+vec3(1,1,1));
@@ -555,10 +424,10 @@ Volume getBoundingVolume(const vector<Obj> world){
 	return Volume{min, max};
 }
 
-//This does not translate the gridmap
-void translateObj(Obj &object, vec3 translation){
+//This does not translate the gridmap, thats why triangles are passed
+void translateObj(Obj &object, vector<Triangle> &triangles, vec3 translation){
 	//shfit triangles
-	for (auto it = object.triangles.begin();it != object.triangles.end();++it){
+	for (auto it = triangles.begin();it != triangles.end();++it){
 		it->p[0] += translation;
 		it->p[1] += translation;
 		it->p[2] += translation;
@@ -570,10 +439,10 @@ void translateObj(Obj &object, vec3 translation){
 	object.sdf.corner += translation;
 }
 
-void scaleObj(Obj &object, double maxDimension){
+void scaleObj(Obj &object, vector<Triangle> &triangles, double maxDimension){
 	vec3 diff = (object.bounds.max - object.bounds.min);
 	double scale = maxDimension / max(max(diff[0], diff[1]), diff[2]);
-	for (auto it = object.triangles.begin();it != object.triangles.end();++it){
+	for (auto it = triangles.begin();it != triangles.end();++it){
 		it->p[0] *= scale;
 		it->p[1] *= scale;
 		it->p[2] *= scale;
@@ -597,14 +466,15 @@ void loadWorld(vector<Obj> &world, json &scene){
 		Obj object;
 		string filepath = scene["models"][(string)object_json["name"]];
 		cerr << "Loading " << object_json << endl;
-		loadTriangles(filepath + ".obj", object.triangles);
+		vector<Triangle> triangles;
+		loadTriangles(filepath + ".obj", triangles);
 		loadSDF(filepath + ".sdf", object.sdf);
-		object.bounds = getBoundingVolume(object.triangles);
-		cerr << "bounds: " << object.bounds.min << ", " << object.bounds.max << endl;
+		object.bounds = getBoundingVolume(triangles);
 		for (auto& el : object_json.items()){
 			if (el.key() == "translate"){
 				translateObj(
 					object,
+					triangles,
 					vec3(
 						el.value()[0],
 						el.value()[1],
@@ -612,21 +482,24 @@ void loadWorld(vector<Obj> &world, json &scene){
 					)
 				);
 			} else if (el.key() == "scale"){
-				scaleObj(object, el.value());
+				scaleObj(
+					object,
+					triangles,
+					el.value()
+				);
 			}
 		}
-
+		cerr << "bounds: " << object.bounds.min << ", " << object.bounds.max << endl;
 		cerr << "Generating hashmap" << endl;
-
 		object.grid.resolution = object.sdf.resolution * sres_to_gres;
 		int last = 0;
-		for (int i = 0;i < object.triangles.size();i++){
-			int percentage = (100 * (float)i / object.triangles.size());
+		for (int i = 0;i < triangles.size();i++){
+			int percentage = (100 * (float)i / triangles.size());
 			if (last != percentage && percentage && percentage % 20 == 0){
 				cerr << percentage << "%" << endl;
 				last = percentage;
 			}
-			Triangle tri = object.triangles.at(i);
+			Triangle tri = triangles.at(i);
 			set<vec3_int> points;
 			//double a_res = 0.3 * object.grid.resolution / tri.p[0].length();
 			//double b_res = 0.3 * object.grid.resolution / tri.p[1].length();
@@ -747,7 +620,15 @@ int main(int argc, char **argv){
 	vector<Obj> world;
 	
 	loadWorld(world, scene);
-	Volume sceneBounds = getBoundingVolume(world);
+	//cerr << "building bvh" << endl;
+	//BVH bvh(world);
+	//cerr << "deallocating world" << endl;
+	//vector<Obj>().swap(world); //deallocate world vector
+	//Volume sceneBounds = bvh.getBounds();
+
+	Volume sceneBounds = world.at(0).bounds;
+	cerr << sceneBounds.min << endl;
+	cerr << sceneBounds.max << endl;
 
 	const double cam_distance = max(
 		max(
@@ -782,7 +663,7 @@ int main(int argc, char **argv){
 
 		SDL_LockTexture(img, NULL, (void**)&image, &pitch);
 		
-		#pragma omp parallel for num_threads(64)
+		#pragma omp parallel for num_threads(1)
 		for (int y = 0;y < image_height;y++){
 			for (int x = 0;x < image_width;x++){
 				vec3 average(0,0,0);
