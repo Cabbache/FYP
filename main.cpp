@@ -25,8 +25,7 @@
 using namespace std;
 using namespace nlohmann;
 
-const double sres_to_gres = 3;
-
+float sres_to_gres;
 uint32_t total_cells = 0;
 uint32_t total_hits = 0;
 
@@ -600,6 +599,10 @@ int main(int argc, char **argv){
 		.scan<'g', double>()
 		.default_value(1.9)
 		.help("Camera distance");
+	renderer.add_argument("-sg", "--resolution-ratio")
+		.scan<'g', float>()
+		.default_value(2.0)
+		.help("Ratio of grid cell size to that of signed distance field cell size");
 	
 	try{
 		renderer.parse_args(argc, argv);
@@ -615,6 +618,7 @@ int main(int argc, char **argv){
 	auto window_width = renderer.get<int>("--sdl-width");
 	auto window_height = renderer.get<int>("--sdl-height");
 	auto sceneFilePath = renderer.get<string>("--scene");
+	sres_to_gres = renderer.get<float>("--resolution-ratio");
 
 	if (SDL_Init(SDL_INIT_VIDEO) < 0){
 		cerr << "Error initalising SDL" << SDL_GetError() << endl;

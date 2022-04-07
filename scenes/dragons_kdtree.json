@@ -1,0 +1,58 @@
+{
+	"models":{
+		"bunny1k": "models/bunny_1k",
+		"bunny40k": "models/bunny_40k",
+		"dragon": "models/dragon_fixed",
+		"kitten": "models/kitten_50k"
+	},
+	"scene":[
+		{
+			"scale": 0.8,
+			"translate": [0,0,0],
+			"name": "dragon",
+			"mode": "kdtree"
+		},
+		{
+			"scale": 0.8,
+			"translate": [0,0,1],
+			"name": "dragon",
+			"mode": "kdtree"
+		},
+		{
+			"scale": 0.8,
+			"translate": [0,1,0],
+			"name": "dragon",
+			"mode": "kdtree"
+		},
+		{
+			"scale": 0.8,
+			"translate": [0,1,1],
+			"name": "dragon",
+			"mode": "kdtree"
+		},
+		{
+			"scale": 0.8,
+			"translate": [1,0,0],
+			"name": "dragon",
+			"mode": "kdtree"
+		},
+		{
+			"scale": 0.8,
+			"translate": [1,0,1],
+			"name": "dragon",
+			"mode": "kdtree"
+		},
+		{
+			"scale": 0.8,
+			"translate": [1,1,0],
+			"name": "dragon",
+			"mode": "kdtree"
+		},
+		{
+			"scale": 0.8,
+			"translate": [1,1,1],
+			"name": "dragon",
+			"mode": "kdtree"
+		}
+	]
+}
