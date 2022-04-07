@@ -13,8 +13,8 @@ typedef struct boxHitInfo{
 	vec3 origin;
 
 	bool hit;
-	double tmin;
-	double tmax;
+	float tmin;
+	float tmax;
 } boxHitInfo;
 
 typedef struct Triangle{
@@ -40,11 +40,11 @@ typedef struct hitInfo{
 	vec3 origin;
 
 	bool hit;
-	double t;
+	float t;
 	Triangle tri;
 
-	double beta;
-	double gamma;
+	float beta;
+	float gamma;
 } hitInfo;
 
 typedef unordered_map<vec3_int, unordered_set<Triangle, Triangle::HashFunction>, hashFuncVec, equalsFunc> GridMap;
@@ -58,8 +58,8 @@ typedef struct SDF{
 	vec3 origin;
 	vec3 corner;
 	vec3 dimensions;
-	double resolution;
-	double ***values;
+	float resolution;
+	float ***values;
 } SDF;
 
 ////////////////////////////////////////////////////
@@ -139,7 +139,7 @@ typedef struct Obj{
 	KDTreeCPU *kdtree;
 	SDF sdf;
 	struct {
-		double resolution;
+		float resolution;
 		GridMap map;
 	} grid;
 } Obj;
@@ -149,8 +149,8 @@ typedef struct Obj{
 //if world coordinate is outside sdf domain, inside = false
 typedef struct SDFResult{
 	bool inside;
-	double value;
+	float value;
 } SDFResult;
 
-typedef pair<const Obj*, double> Ohd;
+typedef pair<const Obj*, float> Ohd;
 #endif

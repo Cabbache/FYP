@@ -9,20 +9,20 @@ using std::sqrt;
 class vec3 {
 	public:
 		vec3() : e{0,0,0} {}
-		vec3(double e0, double e1, double e2) : e{e0, e1, e2} {}
+		vec3(float e0, float e1, float e2) : e{e0, e1, e2} {}
 		vec3(const vec3 &v) : e{v.x(), v.y(), v.z()} {}
 
-		double x() const { return e[0]; }
-		double y() const { return e[1]; }
-		double z() const { return e[2]; }
+		float x() const { return e[0]; }
+		float y() const { return e[1]; }
+		float z() const { return e[2]; }
 
-		void setX(double x){ e[0] = x; }
-    void setY(double y){ e[1] = y; }
-    void setZ(double z){ e[2] = z; }
+		void setX(float x){ e[0] = x; }
+    void setY(float y){ e[1] = y; }
+    void setZ(float z){ e[2] = z; }
 
 		vec3 operator-() const { return vec3(-e[0], -e[1], -e[2]); }
-		double operator[](int i) const { return e[i]; }
-		double& operator[](int i) { return e[i]; }
+		float operator[](int i) const { return e[i]; }
+		float& operator[](int i) { return e[i]; }
 
 		bool operator==(const vec3 &v) const{
 			return e[0] == v.e[0] && e[1] == v.e[1] && e[2] == v.e[2];
@@ -35,14 +35,14 @@ class vec3 {
 			return *this;
 		}
 
-		vec3& operator*=(const double t) {
+		vec3& operator*=(const float t) {
 			e[0] *= t;
 			e[1] *= t;
 			e[2] *= t;
 			return *this;
 		}
 
-		vec3& operator/=(const double t) {
+		vec3& operator/=(const float t) {
 			return *this *= 1/t;
 		}
 
@@ -58,23 +58,23 @@ class vec3 {
 			return *this;
 		}
 
-		double length() const {
+		float length() const {
 			return sqrt(length_squared());
 		}
 
-		double length_squared() const {
+		float length_squared() const {
 			return e[0]*e[0] + e[1]*e[1] + e[2]*e[2];
 		}
 
 	public:
-		double e[3];
+		float e[3];
 };
 
 class vec3_int{
 	public:
 		int x,y,z;
 
-		vec3_int(double x, double y, double z){
+		vec3_int(float x, float y, float z){
 			this->x = (int)round(x);
 			this->y = (int)round(y);
 			this->z = (int)round(z);
@@ -126,19 +126,19 @@ inline vec3 operator*(const vec3 &u, const vec3 &v) {
 	return vec3(u.e[0] * v.e[0], u.e[1] * v.e[1], u.e[2] * v.e[2]);
 }
 
-inline vec3 operator*(double t, const vec3 &v) {
+inline vec3 operator*(float t, const vec3 &v) {
 	return vec3(t*v.e[0], t*v.e[1], t*v.e[2]);
 }
 
-inline vec3 operator*(const vec3 &v, double t) {
+inline vec3 operator*(const vec3 &v, float t) {
 	return t * v;
 }
 
-inline vec3 operator/(vec3 v, double t) {
+inline vec3 operator/(vec3 v, float t) {
 	return (1/t) * v;
 }
 
-inline double dot(const vec3 &u, const vec3 &v) {
+inline float dot(const vec3 &u, const vec3 &v) {
 	return u.e[0] * v.e[0]
 		 + u.e[1] * v.e[1]
 		 + u.e[2] * v.e[2];
@@ -154,8 +154,8 @@ inline vec3 unit_vector(vec3 v) {
 	return v / v.length();
 }
 
-inline vec3 rotateY(vec3 v, double degrees){
-	double radians = 3.1415926535 * degrees / 180;
+inline vec3 rotateY(vec3 v, float degrees){
+	float radians = 3.1415926535 * degrees / 180;
 	return vec3(
 		v.e[0] * cos(radians) + v.e[2] * sin(radians),
 		v.e[1],
@@ -163,8 +163,8 @@ inline vec3 rotateY(vec3 v, double degrees){
 	);
 }
 
-inline vec3 rotateX(vec3 v, double degrees){
-	double radians = 3.1415926535 * degrees / 180;
+inline vec3 rotateX(vec3 v, float degrees){
+	float radians = 3.1415926535 * degrees / 180;
 	return vec3(
 		v.e[0],
 		v.e[1] * cos(radians) - v.e[2] * sin(radians),

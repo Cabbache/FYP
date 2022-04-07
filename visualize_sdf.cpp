@@ -9,8 +9,8 @@ typedef struct SDF{
 	vec3 origin;
 	vec3 corner;
 	vec3 dimensions;
-	double resolution;
-	double ***values;
+	float resolution;
+	float ***values;
 } SDF;
 
 void loadSDF(SDF &sdf, string filename){
@@ -31,11 +31,11 @@ void loadSDF(SDF &sdf, string filename){
 	getline(ss, value, ' ');
 	sdf.dimensions[2] = stoi(value);
 
-	sdf.values = new double**[(int)sdf.dimensions[0]];
+	sdf.values = new float**[(int)sdf.dimensions[0]];
 	for (int a = 0;a < sdf.dimensions[0];a++){
-		sdf.values[a] = new double*[(int)sdf.dimensions[1]];
+		sdf.values[a] = new float*[(int)sdf.dimensions[1]];
 		for (int b = 0;b < sdf.dimensions[1];b++)
-			sdf.values[a][b] = new double[(int)sdf.dimensions[2]];
+			sdf.values[a][b] = new float[(int)sdf.dimensions[2]];
 	}
 
 	getline(sfile, line);
@@ -92,11 +92,11 @@ int main(int argc, char **argv){
 		int slice[(int)sdf.dimensions.y()][(int)sdf.dimensions.z()];
 
 		//figure min and max
-		double minvalue, maxvalue;
+		float minvalue, maxvalue;
 		minvalue = maxvalue = sdf.values[sliceX][0][0];
 		for (int y = 0;y < sdf.dimensions.y();y++){
 			for (int z = 0;z < sdf.dimensions.z();z++){
-				double value = sdf.values[sliceX][y][z];
+				float value = sdf.values[sliceX][y][z];
 				if (value > maxvalue)
 					maxvalue = value;
 				if (value < minvalue)
@@ -107,7 +107,7 @@ int main(int argc, char **argv){
 		//loop again but adjust from 0 to 255
 		for (int z = 0;z < sdf.dimensions.z();z++){
 			for (int y = 0;y < sdf.dimensions.y();y++){
-				double value = sdf.values[sliceX][y][z];
+				float value = sdf.values[sliceX][y][z];
 				int adjusted = (int)((value - minvalue) * (255.0 / (maxvalue - minvalue)));
 				if (value >= 0)
 					ppm << adjusted << " " << " 0 " << " " << adjusted << endl;

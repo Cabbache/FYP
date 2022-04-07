@@ -64,11 +64,11 @@ void loadSDF(string filename, SDF &sdf){
 	getline(ss, value, ' ');
 	sdf.dimensions[2] = stoi(value);
 
-	sdf.values = new double**[(int)sdf.dimensions[0]];
+	sdf.values = new float**[(int)sdf.dimensions[0]];
 	for (int a = 0;a < sdf.dimensions[0];a++){
-		sdf.values[a] = new double*[(int)sdf.dimensions[1]];
+		sdf.values[a] = new float*[(int)sdf.dimensions[1]];
 		for (int b = 0;b < sdf.dimensions[1];b++)
-			sdf.values[a][b] = new double[(int)sdf.dimensions[2]];
+			sdf.values[a][b] = new float[(int)sdf.dimensions[2]];
 	}
 
 	getline(sfile, line);
@@ -169,34 +169,34 @@ void loadTriangles(string inputfile, vector<Triangle> &triangles){
 	}
 }
 
-double drand(){
-	return (double)rand()/(double)RAND_MAX;
+float drand(){
+	return (float)rand()/(float)RAND_MAX;
 }
 
 //pages 36 - 38, triangle - ray intersection test
 void triHit(const Triangle &tri, hitInfo &info){
-	double a = tri.p[0].x() - tri.p[1].x();
-	double b = tri.p[0].y() - tri.p[1].y();
-	double c = tri.p[0].z() - tri.p[1].z();
+	float a = tri.p[0].x() - tri.p[1].x();
+	float b = tri.p[0].y() - tri.p[1].y();
+	float c = tri.p[0].z() - tri.p[1].z();
 
-	double d = tri.p[0].x() - tri.p[2].x();
-	double e = tri.p[0].y() - tri.p[2].y();
-	double f = tri.p[0].z() - tri.p[2].z();
+	float d = tri.p[0].x() - tri.p[2].x();
+	float e = tri.p[0].y() - tri.p[2].y();
+	float f = tri.p[0].z() - tri.p[2].z();
 
-	double g = info.ray.x();
-	double h = info.ray.y();
-	double i = info.ray.z();
+	float g = info.ray.x();
+	float h = info.ray.y();
+	float i = info.ray.z();
 
 	vec3 diff = tri.p[0] - info.origin;
-	double j = diff.x();
-	double k = diff.y();
-	double l = diff.z();
+	float j = diff.x();
+	float k = diff.y();
+	float l = diff.z();
 
-	double M = a*(e*i - h*f) + b*(g*f - d*i) + c*(d*h - e*g);
+	float M = a*(e*i - h*f) + b*(g*f - d*i) + c*(d*h - e*g);
 
-	double beta = j*(e*i - h*f) + k*(g*f - d*i) + l*(d*h - e*g);
-	double gamma = i*(a*k - j*b) + h*(j*c - a*l) + g*(b*l - k*c);
-	double t = f*(a*k - j*b) + e*(j*c - a*l) + d*(b*l - k*c);
+	float beta = j*(e*i - h*f) + k*(g*f - d*i) + l*(d*h - e*g);
+	float gamma = i*(a*k - j*b) + h*(j*c - a*l) + g*(b*l - k*c);
+	float t = f*(a*k - j*b) + e*(j*c - a*l) + d*(b*l - k*c);
 
 	beta /= M;
 	gamma /= M;
@@ -275,7 +275,7 @@ vec3 get_color(vec3 origin, vec3 ray, const vector<Obj> &world, int depth=0){
 				auto start = std::chrono::system_clock::now();
 				marchSDF(ohd.first->sdf, march);
 				auto end = std::chrono::system_clock::now();
-				std::chrono::duration<double> elapsed_seconds = end-start;
+				std::chrono::duration<float> elapsed_seconds = end-start;
 
 				if (!march.hit)
 					break;
@@ -400,14 +400,14 @@ vec3 get_color(vec3 origin, vec3 ray, const vector<Obj> &world, int depth=0){
 
 Volume getBoundingVolume(const vector<Triangle> &triangles){
 	vec3 min(
-		std::numeric_limits<double>::max(),
-		std::numeric_limits<double>::max(),
-		std::numeric_limits<double>::max()
+		std::numeric_limits<float>::max(),
+		std::numeric_limits<float>::max(),
+		std::numeric_limits<float>::max()
 	);
 	vec3 max(
-		std::numeric_limits<double>::min(),
-		std::numeric_limits<double>::min(),
-		std::numeric_limits<double>::min()
+		std::numeric_limits<float>::min(),
+		std::numeric_limits<float>::min(),
+		std::numeric_limits<float>::min()
 	);
 	for (Triangle tri : triangles){
 		for (int i = 0;i < 3;i++){
@@ -420,14 +420,14 @@ Volume getBoundingVolume(const vector<Triangle> &triangles){
 
 Volume getBoundingVolume(const vector<Obj> world){
 	vec3 min(
-		std::numeric_limits<double>::max(),
-		std::numeric_limits<double>::max(),
-		std::numeric_limits<double>::max()
+		std::numeric_limits<float>::max(),
+		std::numeric_limits<float>::max(),
+		std::numeric_limits<float>::max()
 	);
 	vec3 max(
-		std::numeric_limits<double>::min(),
-		std::numeric_limits<double>::min(),
-		std::numeric_limits<double>::min()
+		std::numeric_limits<float>::min(),
+		std::numeric_limits<float>::min(),
+		std::numeric_limits<float>::min()
 	);
 	for (const Obj &object : world){
 		min.min(object.bounds.min);
@@ -451,9 +451,9 @@ void translateObj(Obj &object, vector<Triangle> &triangles, vec3 translation){
 	object.sdf.corner += translation;
 }
 
-void scaleObj(Obj &object, vector<Triangle> &triangles, double maxDimension){
+void scaleObj(Obj &object, vector<Triangle> &triangles, float maxDimension){
 	vec3 diff = (object.bounds.max - object.bounds.min);
-	double scale = maxDimension / max(max(diff[0], diff[1]), diff[2]);
+	float scale = maxDimension / max(max(diff[0], diff[1]), diff[2]);
 	for (auto it = triangles.begin();it != triangles.end();++it){
 		it->p[0] *= scale;
 		it->p[1] *= scale;
@@ -527,16 +527,16 @@ void loadWorld(vector<Obj> &world, json &scene){
 				}
 				Triangle tri = triangles.at(i);
 				set<vec3_int> points;
-				//double a_res = 0.3 * object.grid.resolution / tri.p[0].length();
-				//double b_res = 0.3 * object.grid.resolution / tri.p[1].length();
-				double a_res = 0.07;
-				double b_res = 0.07;
-				for (double a = 0;a <= 1.0 + a_res;a+=a_res){
-					for (double b = 0;b <= 1.0 - min(1.0,a) + b_res;b+=b_res){
+				//float a_res = 0.3 * object.grid.resolution / tri.p[0].length();
+				//float b_res = 0.3 * object.grid.resolution / tri.p[1].length();
+				float a_res = 0.07;
+				float b_res = 0.07;
+				for (float a = 0;a <= 1.0f + a_res;a+=a_res){
+					for (float b = 0;b <= 1.0f - min(1.0f,a) + b_res;b+=b_res){
 						//clipping
-						double a_c = min(1.0, a);
-						double b_c = min(1.0-a_c, b);
-						double c = 1.0 - a_c - b_c;
+						float a_c = min(1.0f, a);
+						float b_c = min(1.0f-a_c, b);
+						float c = 1.0 - a_c - b_c;
 
 						vec3_int point(
 								(
@@ -596,7 +596,7 @@ int main(int argc, char **argv){
 		.default_value(8)
 		.help("Number of threads");
 	renderer.add_argument("-d", "--distance")
-		.scan<'g', double>()
+		.scan<'g', float>()
 		.default_value(1.9)
 		.help("Camera distance");
 	renderer.add_argument("-sg", "--resolution-ratio")
@@ -637,8 +637,8 @@ int main(int argc, char **argv){
 	);
 	renderer_sdl = SDL_CreateRenderer(win, -1, SDL_RENDERER_ACCELERATED);
 
-	const double angle = 1.0;
-	const double aspect = (double)image_width / image_height;
+	const float angle = 1.0;
+	const float aspect = (float)image_width / image_height;
 
 	ifstream sceneFile(sceneFilePath);
 	if (!sceneFile.is_open()){
@@ -664,7 +664,7 @@ int main(int argc, char **argv){
 	cerr << sceneBounds.min << endl;
 	cerr << sceneBounds.max << endl;
 
-	const double cam_distance = max(
+	const float cam_distance = max(
 		max(
 			abs(sceneBounds.min.x()),
 			abs(sceneBounds.min.z())
@@ -673,12 +673,12 @@ int main(int argc, char **argv){
 			abs(sceneBounds.max.x()),
 			abs(sceneBounds.max.z())
 		)
-	) * renderer.get<double>("--distance");
+	) * renderer.get<float>("--distance");
 
 	//frame buffer
-	double frame_width = 1;
-	double frame_height = frame_width / aspect;
-	double eye_frame_distance = 1; //or focal length?
+	float frame_width = 1;
+	float frame_height = frame_width / aspect;
+	float eye_frame_distance = 1; //or focal length?
 	vec3 frame_topleft = vec3(-frame_width/2, frame_height/2, eye_frame_distance);
 
 	unsigned char *image;
@@ -704,8 +704,8 @@ int main(int argc, char **argv){
 				for (int a = 0;a < aliasing_iters;a++){
 					vec3 ray = frame_topleft;
 					ray += vec3(
-						frame_width * ((x+drand()) / (double)image_width),
-						-frame_height * ((y+drand()) / (double)image_height),
+						frame_width * ((x+drand()) / (float)image_width),
+						-frame_height * ((y+drand()) / (float)image_height),
 						0
 					);
 					ray = rotateX(rotateY(ray, rotY), rotX);
@@ -762,7 +762,7 @@ int main(int argc, char **argv){
 		SDL_RenderPresent(renderer_sdl);
 
 		auto endFrame = std::chrono::system_clock::now();
-		std::chrono::duration<double> elapsed_seconds = endFrame-startFrame;
+		std::chrono::duration<float> elapsed_seconds = endFrame-startFrame;
 		cerr << "fps: " << 1. / elapsed_seconds.count() << endl;
 	}
 	return 0;

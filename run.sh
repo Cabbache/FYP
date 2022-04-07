@@ -13,7 +13,8 @@ set -e
 
 ./compile.sh
 rm img_*.ppm || :
-SCENE="bunny_kitten.json"
+#SCENE="bunny_kitten.json"
+SCENE="dragons.json"
 if [[ "$1" == "quality" ]]
 then
 	./build/renderer -s "scenes/$SCENE" -w 1280 -h 960 -sw 1664 -sh 1248 -a 2
