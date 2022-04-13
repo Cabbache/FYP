@@ -19,7 +19,6 @@ typedef struct boxHitInfo{
 
 typedef struct Triangle{
 	vec3 p[3];
-	bool reflective;
 
 	bool operator==(const Triangle& triangle) const{
 		return p[0] == triangle.p[0] && p[1] == triangle.p[1] && p[2] == triangle.p[2];
@@ -134,10 +133,18 @@ public:
 //#include "KDTreeCPU.h"
 class KDTreeCPU;
 
+typedef struct Material{
+	bool isLight;
+	float specularity; //0 to 1
+	float absorption; //0 to 1
+	vec3 color;
+} Material;
+
 typedef struct Obj{
 	Volume bounds;
 	KDTreeCPU *kdtree;
 	SDF sdf;
+	Material material;
 	struct {
 		float resolution;
 		GridMap map;

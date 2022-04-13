@@ -131,7 +131,6 @@ void loadTriangles(string inputfile, vector<Triangle> &triangles){
 			// Loop over vertices in the face.
 			//cout << fv << endl;
 			Triangle tr;
-			tr.reflective = false;
 			for (size_t v = 0; v < fv; v++) {
 				// access to vertex
 				tinyobj::index_t idx = shapes[s].mesh.indices[index_offset + v];
@@ -226,9 +225,9 @@ void marchSDF(const SDF &sdf, hitInfo &info){
 }
 
 vec3 get_color(vec3 origin, vec3 ray, const vector<Obj> &world, int depth=0){
-	//sometimes rays get stuck inside the 3d model
-	if (depth > 40)
+	if (depth > 3)
 		return vec3(0,0,0);
+
 	ray = unit_vector(ray);
 
 	Triangle closestTri;
@@ -238,6 +237,7 @@ vec3 get_color(vec3 origin, vec3 ray, const vector<Obj> &world, int depth=0){
 		false,
 		std::numeric_limits<float>::max(),
 	};
+	const Obj *collided = nullptr;
 
 	vector<Ohd> boxes_hit;
 
@@ -261,7 +261,7 @@ vec3 get_color(vec3 origin, vec3 ray, const vector<Obj> &world, int depth=0){
 		}
 	);
 
-	for (Ohd ohd: boxes_hit){
+	for (Ohd ohd : boxes_hit){
 		if (ohd.first->kdtree == nullptr){
 			vec3 march_origin = origin + (ohd.second * ray); //start marching from ray box intersection
 			while (!closest.hit){
@@ -330,6 +330,7 @@ vec3 get_color(vec3 origin, vec3 ray, const vector<Obj> &world, int depth=0){
 						
 						closest = check;
 						closestTri = tri;
+						collided = ohd.first;
 
 						//There is no depth test
 
@@ -352,49 +353,46 @@ vec3 get_color(vec3 origin, vec3 ray, const vector<Obj> &world, int depth=0){
 			ohd.first->kdtree->intersect(hitinfo, hitpoint);
 			closest = hitinfo;
 			closestTri = hitinfo.tri;
-			closestTri.reflective = false;
+			collided = ohd.first;
 		}
 	}
 	end_iter:;
 	//if no triangles hit, color the background
 	if (!closest.hit){
-		vec3 pp = 127*(unit_vector(ray)+vec3(1,1,1));
-		return vec3((int)pp[1], (int)pp[2], (int)pp[0]);
+		return vec3(0,0,0);
 	}
+
+	if (collided->material.isLight)
+		return collided->material.color;
 
 	vec3 hitpoint = origin + (ray * closest.t);
-
-	//if triangle is mirror
-	if (closestTri.reflective){
-		vec3 normal = unit_vector(
-			cross(
-				closestTri.p[0] - closestTri.p[1],
-				closestTri.p[0] - closestTri.p[2]
-			)
-		);
-		vec3 reflected = ray - 2*dot(ray, normal)*normal;
-
-		//fuzzy mirror
-		//vec3 deflect = unit_vector(vec3(drand()-0.5, drand()-0.5, drand()-0.5));
-		//reflected += deflect / 20;
-
-		return get_color(hitpoint, reflected, world, ++depth);
-	}
+	vec3 normal = unit_vector(
+		cross(
+			closestTri.p[0] - closestTri.p[1],
+			closestTri.p[0] - closestTri.p[2]
+		)
+	);
+	float dotraynormal = dot(ray, normal);
+	//vec3 reflected = ray - 2*dotraynormal*normal;
+	return (1-collided->material.absorption) *
+	(get_color(hitpoint, normal + vec3(drand(), drand(), drand()), world, ++depth) * collided->material.color/255) *
+	dotraynormal / (ray.length() * normal.length()); //lambert cosine
+	//return get_color(hitpoint, reflected, world, ++depth);
 
 	//if hit border of non mirror triangle, make border black
-	if (closest.beta < 0.01 || closest.gamma < 0.01 || (1-closest.beta-closest.gamma) < 0.01)
-		return vec3(0,0,0);
+	//if (closest.beta < 0.01 || closest.gamma < 0.01 || (1-closest.beta-closest.gamma) < 0.01)
+	//	return vec3(0,0,0);
 	
 	//color the non mirror triangle
-	vec3 color = unit_vector(
-		vec3(
-			(hitpoint - closestTri.p[0]).length(),
-			(hitpoint - closestTri.p[1]).length(),
-			(hitpoint - closestTri.p[2]).length()
-		)
-	)*255;
+	//vec3 color = unit_vector(
+	//	vec3(
+	//		(hitpoint - closestTri.p[0]).length(),
+	//		(hitpoint - closestTri.p[1]).length(),
+	//		(hitpoint - closestTri.p[2]).length()
+	//	)
+	//)*255;
 	//vec3 color(127 * ((unit_vector(hitpoint - (world[0].bounds.min + world[0].bounds.max) / 2)) + vec3(1,1,1)));
-	return color;
+	//return color;
 	//return vec3(color.z(), color.x(), color.y());
 }
 
@@ -516,6 +514,7 @@ void loadWorld(vector<Obj> &world, json &scene){
 					);
 				}
 			}
+
 			cerr << "Generating hashmap" << endl;
 			object.grid.resolution = object.sdf.resolution * sres_to_gres;
 			int last = 0;
@@ -560,6 +559,16 @@ void loadWorld(vector<Obj> &world, json &scene){
 			}
 			cerr << "Counted " << (avg / (float)count) << " triangles / cell (avg)"<< endl;
 		}
+
+		object.material.isLight = object_json["isLight"];
+		object.material.color = vec3(
+			object_json["color"][0],
+			object_json["color"][1],
+			object_json["color"][2]
+		);
+		cerr << "color: " << object.material.color << endl;
+		object.material.absorption = object_json["absorption"];
+
 		cerr << "bounds: " << object.bounds.min << ", " << object.bounds.max << endl;
 		world.push_back(object);
 	}
@@ -572,37 +581,40 @@ int main(int argc, char **argv){
 		.required()
 		.help("Specify input scene file");
 	renderer.add_argument("-w", "--width")
-		.scan<'d', int>()
-		.default_value(1280)
+		.scan<'u', unsigned int>()
+		.default_value(1280u)
 		.help("Output image width");
 	renderer.add_argument("-h", "--height")
-		.scan<'d', int>()
-		.default_value(960)
+		.scan<'u', unsigned int>()
+		.default_value(960u)
 		.help("Output image height");
 	renderer.add_argument("-sw", "--sdl-width")
-		.scan<'d', int>()
-		.default_value(1280)
+		.scan<'u', unsigned int>()
+		.default_value(1280u)
 		.help("SDL window width");
 	renderer.add_argument("-sh", "--sdl-height")
-		.scan<'d', int>()
-		.default_value(960)
+		.scan<'u', unsigned int>()
+		.default_value(960u)
 		.help("SDL window height");
 	renderer.add_argument("-a", "--antialiasing")
-		.scan<'d', int>()
-		.default_value(2)
+		.scan<'u', unsigned int>()
+		.default_value(2u)
 		.help("Number of iterations");
 	renderer.add_argument("-t", "--threads")
-		.scan<'d', int>()
-		.default_value(8)
+		.scan<'u', unsigned int>()
+		.default_value(8u)
 		.help("Number of threads");
-	renderer.add_argument("-d", "--distance")
-		.scan<'g', float>()
-		.default_value(1.9)
-		.help("Camera distance");
 	renderer.add_argument("-sg", "--resolution-ratio")
-		.scan<'g', float>()
-		.default_value(2.0)
+		.scan<'f', float>()
+		.default_value(2.0f)
 		.help("Ratio of grid cell size to that of signed distance field cell size");
+	renderer.add_argument("-p", "--path")
+		.help("File path to the JSON motion description (no libsdl, only ppm)");
+	renderer.add_argument("-f", "--frames")
+		.scan<'u', unsigned int>()
+		.default_value(5u)
+		.required()
+		.help("Number of frames to generate (used with --path)");
 	
 	try{
 		renderer.parse_args(argc, argv);
@@ -612,32 +624,15 @@ int main(int argc, char **argv){
 		return 1;
 	}
 
-	auto image_width = renderer.get<int>("--width");
-	auto image_height = renderer.get<int>("--height");
-	auto aliasing_iters = renderer.get<int>("--antialiasing");
-	auto window_width = renderer.get<int>("--sdl-width");
-	auto window_height = renderer.get<int>("--sdl-height");
+	auto image_width = renderer.get<unsigned int>("--width");
+	auto image_height = renderer.get<unsigned int>("--height");
+	auto aliasing_iters = renderer.get<unsigned int>("--antialiasing");
+	auto window_width = renderer.get<unsigned int>("--sdl-width");
+	auto window_height = renderer.get<unsigned int>("--sdl-height");
 	auto sceneFilePath = renderer.get<string>("--scene");
+	auto pathpath = renderer.present("--path");
+	auto nframes = renderer.get<unsigned int>("--frames");
 	sres_to_gres = renderer.get<float>("--resolution-ratio");
-
-	if (SDL_Init(SDL_INIT_VIDEO) < 0){
-		cerr << "Error initalising SDL" << SDL_GetError() << endl;
-	}
-
-	SDL_Window *win = nullptr;
-	SDL_Renderer *renderer_sdl = nullptr;
-
-	win = SDL_CreateWindow(
-		"Scene view",
-		SDL_WINDOWPOS_CENTERED,
-		SDL_WINDOWPOS_CENTERED,
-		window_width,
-		window_height,
-		0
-	);
-	renderer_sdl = SDL_CreateRenderer(win, -1, SDL_RENDERER_ACCELERATED);
-
-	const float angle = 1.0;
 	const float aspect = (float)image_width / image_height;
 
 	ifstream sceneFile(sceneFilePath);
@@ -648,6 +643,9 @@ int main(int argc, char **argv){
 
 	json scene;
 	sceneFile >> scene;
+	sceneFile.close();
+
+	vec3 camera_origin;
 
 	cerr << "Loading models" << endl;
 	vector<Obj> world;
@@ -664,106 +662,180 @@ int main(int argc, char **argv){
 	cerr << sceneBounds.min << endl;
 	cerr << sceneBounds.max << endl;
 
-	const float cam_distance = max(
-		max(
-			abs(sceneBounds.min.x()),
-			abs(sceneBounds.min.z())
-		),
-		max(
-			abs(sceneBounds.max.x()),
-			abs(sceneBounds.max.z())
-		)
-	) * renderer.get<float>("--distance");
+	const float frame_width = 1;
+	const float frame_height = frame_width / aspect;
+	const float eye_frame_distance = 1; //or focal length?
+	const vec3 frame_topleft = vec3(-frame_width/2, frame_height/2, eye_frame_distance);
 
-	//frame buffer
-	float frame_width = 1;
-	float frame_height = frame_width / aspect;
-	float eye_frame_distance = 1; //or focal length?
-	vec3 frame_topleft = vec3(-frame_width/2, frame_height/2, eye_frame_distance);
-
-	unsigned char *image;
-	SDL_Texture *img = nullptr;
-	img = SDL_CreateTexture(renderer_sdl, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, image_width, image_height);
-	int pitch;
-
-	vec3 camera_origin = vec3(0,0.5*(sceneBounds.max.y() + sceneBounds.min.y()),-cam_distance);
-	vec3 camera_ray = vec3(0.01,0,0);
-
-	int rotY = 0;
-	int rotX = 0;
-	while (1){
-		auto startFrame = std::chrono::system_clock::now();
-
-		SDL_LockTexture(img, NULL, (void**)&image, &pitch);
-		
-		#pragma omp parallel for num_threads(64)
-		for (int y = 0;y < image_height;y++){
-			for (int x = 0;x < image_width;x++){
-				vec3 average(0,0,0);
-
-				for (int a = 0;a < aliasing_iters;a++){
-					vec3 ray = frame_topleft;
-					ray += vec3(
-						frame_width * ((x+drand()) / (float)image_width),
-						-frame_height * ((y+drand()) / (float)image_height),
-						0
-					);
-					ray = rotateX(rotateY(ray, rotY), rotX);
-					//ray = rotateY(ray, rotY);
-					average += get_color(camera_origin, ray, world);
-				}
-				average /= aliasing_iters;
-				image[4*(y*image_width + x) + 0] = 255;
-				image[4*(y*image_width + x) + 1] = average[2];
-				image[4*(y*image_width + x) + 2] = average[1];
-				image[4*(y*image_width + x) + 3] = average[0];
-			}
+	if (!pathpath){
+		if (SDL_Init(SDL_INIT_VIDEO) < 0){
+			cerr << "Error initalising SDL" << SDL_GetError() << endl;
 		}
 
-		SDL_Event event;
-		while (SDL_PollEvent(&event)){
-			switch (event.type){
-				case SDL_QUIT:
-					return 1;
-				case SDL_KEYDOWN:
-					switch (event.key.keysym.scancode){
-						case SDL_SCANCODE_W:
-							camera_origin += rotateX(rotateY(vec3(0,0,0.02), rotY), rotX);
-							break;
-						case SDL_SCANCODE_S:
-							camera_origin += rotateX(rotateY(vec3(0,0,-0.02), rotY), rotX);
-							break;
-						case SDL_SCANCODE_A:
-							rotY--;
-							break;
-						case SDL_SCANCODE_D:
-							rotY++;
-							break;
-						case SDL_SCANCODE_UP:
-							rotX--;
-							break;
-						case SDL_SCANCODE_DOWN:
-							rotX++;
-							break;
+		SDL_Window *win = nullptr;
+		SDL_Renderer *renderer_sdl = nullptr;
+
+		win = SDL_CreateWindow(
+			"Scene view",
+			SDL_WINDOWPOS_CENTERED,
+			SDL_WINDOWPOS_CENTERED,
+			window_width,
+			window_height,
+			0
+		);
+		renderer_sdl = SDL_CreateRenderer(win, -1, SDL_RENDERER_ACCELERATED);
+
+		//frame buffer
+		unsigned char *image;
+		SDL_Texture *img = nullptr;
+		img = SDL_CreateTexture(renderer_sdl, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, image_width, image_height);
+		int pitch;
+
+		camera_origin = vec3(0,0.5*(sceneBounds.max.y() + sceneBounds.min.y()),-1);
+
+		int rotY = 0;
+		int rotX = 0;
+		while (1){
+			auto startFrame = std::chrono::system_clock::now();
+
+			SDL_LockTexture(img, NULL, (void**)&image, &pitch);
+			
+			#pragma omp parallel for num_threads(64)
+			for (int y = 0;y < image_height;y++){
+				for (int x = 0;x < image_width;x++){
+					vec3 average(0,0,0);
+
+					for (int a = 0;a < aliasing_iters;a++){
+						vec3 ray = frame_topleft;
+						ray += vec3(
+							frame_width * ((x+drand()) / (float)image_width),
+							-frame_height * ((y+drand()) / (float)image_height),
+							0
+						);
+						ray = rotateX(rotateY(ray, rotY), rotX);
+						//ray = rotateY(ray, rotY);
+						average += get_color(camera_origin, ray, world);
 					}
+					average /= aliasing_iters;
+					image[4*(y*image_width + x) + 0] = 255;
+					image[4*(y*image_width + x) + 1] = average[2];
+					image[4*(y*image_width + x) + 2] = average[1];
+					image[4*(y*image_width + x) + 3] = average[0];
+				}
 			}
+
+			SDL_Event event;
+			while (SDL_PollEvent(&event)){
+				switch (event.type){
+					case SDL_QUIT:
+						return 1;
+					case SDL_KEYDOWN:
+						switch (event.key.keysym.scancode){
+							case SDL_SCANCODE_W:
+								camera_origin += rotateX(rotateY(vec3(0,0,0.02), rotY), rotX);
+								break;
+							case SDL_SCANCODE_S:
+								camera_origin += rotateX(rotateY(vec3(0,0,-0.02), rotY), rotX);
+								break;
+							case SDL_SCANCODE_A:
+								rotY--;
+								break;
+							case SDL_SCANCODE_D:
+								rotY++;
+								break;
+							case SDL_SCANCODE_UP:
+								rotX--;
+								break;
+							case SDL_SCANCODE_DOWN:
+								rotX++;
+								break;
+							case SDL_SCANCODE_H:
+								cerr << camera_origin << ", " << rotateX(rotateY(vec3(0,0,eye_frame_distance), rotY), rotX) << endl;
+						}
+				}
+			}
+
+			SDL_UnlockTexture(img);
+
+			SDL_Rect texr;
+			texr.x = 0;
+			texr.y = 0;
+			texr.w = window_width;
+			texr.h = window_height;
+
+			SDL_RenderClear(renderer_sdl);
+			SDL_RenderCopy(renderer_sdl, img, NULL, &texr);
+			SDL_RenderPresent(renderer_sdl);
+
+			auto endFrame = std::chrono::system_clock::now();
+			std::chrono::duration<float> elapsed_seconds = endFrame-startFrame;
+			cerr << "fps: " << 1. / elapsed_seconds.count() << endl;
+		}
+	} else {
+		ifstream pathFile(*pathpath);
+		if (!pathFile.is_open()){
+			cerr << "Failed to open path file" << endl;
+			return 1;
 		}
 
-		SDL_UnlockTexture(img);
+		json path;
+		pathFile >> path;
+		pathFile.close();
+		
+		camera_origin = vec3(
+			path["start"][0],
+			path["start"][1],
+			path["start"][2]
+		);
 
-		SDL_Rect texr;
-		texr.x = 0;
-		texr.y = 0;
-		texr.w = window_width;
-		texr.h = window_height;
+		vec3 camera_ray = vec3(
+			path["look"][0],
+			path["look"][1],
+			path["look"][2]
+		);
 
-		SDL_RenderClear(renderer_sdl);
-		SDL_RenderCopy(renderer_sdl, img, NULL, &texr);
-		SDL_RenderPresent(renderer_sdl);
+		unsigned int frames_per_move = nframes / path["path"].size();
+		vec3 camera_end = camera_origin;
+		vec3 camera_end_look = camera_ray;
+		for (auto& object_json : path["path"]){
+			camera_end = object_json.contains("goto") ? vec3(
+				object_json["goto"][0],
+				object_json["goto"][1],
+				object_json["goto"][2]
+			) : camera_end;
+			camera_end_look = object_json.contains("lookat") ? vec3(
+				object_json["lookat"][0],
+				object_json["lookat"][1],
+				object_json["lookat"][2]
+			) : camera_end;
 
-		auto endFrame = std::chrono::system_clock::now();
-		std::chrono::duration<float> elapsed_seconds = endFrame-startFrame;
-		cerr << "fps: " << 1. / elapsed_seconds.count() << endl;
+			vec3 look_increment = (camera_end_look - camera_ray) / frames_per_move;
+			vec3 move_increment = (camera_end - camera_origin) / frames_per_move;
+
+			for (int frame = 0;frame < frames_per_move;++frame){
+				#pragma omp parallel for num_threads(64)
+				for (int y = 0;y < image_height;y++){
+					for (int x = 0;x < image_width;x++){
+						vec3 average(0,0,0);
+
+						for (int a = 0;a < aliasing_iters;a++){
+							vec3 ray = frame_topleft;
+							ray += vec3(
+								frame_width * ((x+drand()) / (float)image_width),
+								-frame_height * ((y+drand()) / (float)image_height),
+								0
+							) + camera_ray;
+							average += get_color(camera_origin, ray, world);
+						}
+						average /= aliasing_iters;
+						//write ppm
+					}
+				}	
+
+				camera_origin += move_increment;
+				camera_ray += look_increment;
+			}
+		}
 	}
 	return 0;
 }

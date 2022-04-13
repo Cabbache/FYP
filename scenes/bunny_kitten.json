@@ -10,13 +10,19 @@
 			"scale": 0.8,
 			"translate": [0,0,0],
 			"mode": "kdtree",
+			"color": [255, 255, 255],
+			"isLight": true,
+			"absorption": 0,
 			"name": "bunny40k"
 		},
 		{
 			"scale": 0.8,
-			"translate": [1,0,0],
+			"translate": [0.6,0,0],
 			"mode": "sdf",
-			"name": "kitten"
+			"name": "kitten",
+			"color": [0, 255, 255],
+			"isLight": false,
+			"absorption": 0.1
 		}
 	]
 }
