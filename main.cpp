@@ -797,6 +797,7 @@ int main(int argc, char **argv){
 		unsigned int frames_per_move = nframes / path["path"].size();
 		vec3 camera_end = camera_origin;
 		vec3 camera_end_look = camera_ray;
+		int count = 0;
 		for (auto& object_json : path["path"]){
 			camera_end = object_json.contains("goto") ? vec3(
 				object_json["goto"][0],
@@ -813,6 +814,14 @@ int main(int argc, char **argv){
 			vec3 move_increment = (camera_end - camera_origin) / frames_per_move;
 
 			for (int frame = 0;frame < frames_per_move;++frame){
+				ofstream ppm("img_"+to_string(count++)+".ppm");
+
+				//ppm image headers
+				ppm << "P3" << endl
+				<< image_width << " " << image_height << endl
+				<< "255" << endl;
+				uint8_t *image = new uint8_t[image_width * image_height * 3];
+
 				#pragma omp parallel for num_threads(64)
 				for (int y = 0;y < image_height;y++){
 					for (int x = 0;x < image_width;x++){
@@ -828,9 +837,15 @@ int main(int argc, char **argv){
 							average += get_color(camera_origin, ray, world);
 						}
 						average /= aliasing_iters;
-						//write ppm
+						image[3*(y*image_width + x) + 0] = average[0];
+						image[3*(y*image_width + x) + 1] = average[1];
+						image[3*(y*image_width + x) + 2] = average[2];
 					}
 				}	
+
+				for (int i = 0;i < image_width * image_height;++i)
+					ppm << (int)image[3*i + 0] << " " << (int)image[3*i + 1] << " " << (int)image[3*i + 2] << endl;
+				ppm.close();
 
 				camera_origin += move_increment;
 				camera_ray += look_increment;
