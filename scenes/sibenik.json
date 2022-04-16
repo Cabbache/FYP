@@ -8,9 +8,30 @@
 	},
 	"scene":[
 		{
+			"scale": 1,
+			"name": "sibenik",
+			"color": [0,255,0],
+			"isLight": false,
+			"absorption": 0.3,
+			"mode": "sdf"
+		},
+		{
 			"scale": 2,
-			"translate": [0,0,0],
-			"name": "sibenik"
+			"translate": [0.1,0.6,0],
+			"mode": "kdtree",
+			"color": [255, 255, 255],
+			"isLight": true,
+			"absorption": 0,
+			"name": "bunny40k"
+		},
+		{
+			"scale": 2,
+			"translate": [1,0.6,0],
+			"mode": "kdtree",
+			"color": [255, 255, 255],
+			"isLight": true,
+			"absorption": 0,
+			"name": "bunny40k"
 		}
 	]
 }

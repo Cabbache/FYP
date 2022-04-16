@@ -1,0 +1,39 @@
+{
+	"models":{
+		"bunny1k": "models/bunny_1k",
+		"bunny40k": "models/bunny_40k",
+		"dragon": "models/dragon_fixed",
+		"kitten": "models/kitten_50k",
+		"sibenik": "models/fixed_sibenik",
+		"plane": "models/plane"
+	},
+	"scene":[
+		{
+			"scale": 1,
+			"name": "plane",
+			"translate": [-0.5,0,0],
+			"color": [0,255,0],
+			"isLight": false,
+			"absorption": 0.1,
+			"mode": "kdtree"
+		},
+		{
+			"scale": 1,
+			"translate": [0,0.2,0],
+			"name": "bunny40k",
+			"color": [255,255,255],
+			"isLight": true,
+			"absorption": 0,
+			"mode": "sdf"
+		},
+		{
+			"scale": 1,
+			"translate": [0,-1.4,0],
+			"name": "bunny40k",
+			"color": [255,255,255],
+			"isLight": true,
+			"absorption": 0,
+			"mode": "sdf"
+		}
+	]
+}

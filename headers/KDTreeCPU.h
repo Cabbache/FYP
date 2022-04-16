@@ -10,7 +10,8 @@
 ////////////////////////////////////////////////////
 
 //const int NUM_TRIS_PER_NODE = 2000;
-const int NUM_TRIS_PER_NODE = 10;
+//const int NUM_TRIS_PER_NODE = 10;
+const int NUM_TRIS_PER_NODE = 20;
 const bool USE_TIGHT_FITTING_BOUNDING_BOXES = false;
 //const float INFINITY = std::numeric_limits<float>::max();
 

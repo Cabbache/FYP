@@ -13,8 +13,11 @@ set -e
 
 ./compile.sh
 rm img_*.ppm || :
-SCENE="bunny_kitten.json"
 SPATH="path.json"
+SCENE="cube.json"
+#SCENE="planes.json"
+#SCENE="sibenik.json"
+#SCENE="bunny_kitten.json"
 #SCENE="dragons.json"
 if [[ "$1" == "quality" ]]
 then
@@ -24,7 +27,8 @@ then
 	./build/renderer -s "scenes/$SCENE" -w 300 -h 300 -sw 1664 -sh 1248 -a 5 -sg 1.8
 elif [[ "$1" == "path" ]]
 then
-	./build/renderer -s "scenes/$SCENE" -w 150 -h 150 -a 1 -sg 1.8 -p "$SPATH" -f 20
+	./build/renderer -s "scenes/$SCENE" -w 1280 -h 960 -a 2 -sg 1.8 -p "$SPATH" -f 1200
+	#./build/renderer -s "scenes/$SCENE" -w 300 -h 300 -a 1 -sg 1.8 -p "$SPATH" -f 30
 else
 	./build/renderer -s "scenes/$SCENE" -w 150 -h 150 -a 1 -sg 1.8
 fi

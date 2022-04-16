@@ -225,7 +225,7 @@ void marchSDF(const SDF &sdf, hitInfo &info){
 }
 
 vec3 get_color(vec3 origin, vec3 ray, const vector<Obj> &world, int depth=0){
-	if (depth > 3)
+	if (depth > 4)
 		return vec3(0,0,0);
 
 	ray = unit_vector(ray);
@@ -354,13 +354,14 @@ vec3 get_color(vec3 origin, vec3 ray, const vector<Obj> &world, int depth=0){
 			closest = hitinfo;
 			closestTri = hitinfo.tri;
 			collided = ohd.first;
+			if (hitinfo.hit)
+				goto end_iter;
 		}
 	}
 	end_iter:;
 	//if no triangles hit, color the background
-	if (!closest.hit){
+	if (!closest.hit)
 		return vec3(0,0,0);
-	}
 
 	if (collided->material.isLight)
 		return collided->material.color;
@@ -374,8 +375,13 @@ vec3 get_color(vec3 origin, vec3 ray, const vector<Obj> &world, int depth=0){
 	);
 	float dotraynormal = dot(ray, normal);
 	//vec3 reflected = ray - 2*dotraynormal*normal;
+	int counts = 3;
+	vec3 color(0,0,0);
+	for (int i = 0;i < counts;++i)
+		color += get_color(hitpoint, normal + vec3(drand(), drand(), drand()), world, depth+1);
+	color /= counts;
 	return (1-collided->material.absorption) *
-	(get_color(hitpoint, normal + vec3(drand(), drand(), drand()), world, ++depth) * collided->material.color/255) *
+	(color * collided->material.color/255) *
 	dotraynormal / (ray.length() * normal.length()); //lambert cosine
 	//return get_color(hitpoint, reflected, world, ++depth);
 
@@ -471,25 +477,28 @@ void scaleObj(Obj &object, vector<Triangle> &triangles, float maxDimension){
 		object.sdf.values[i][j][k] *= scale;
 }
 
-void loadKDTree(Obj &object, string inputfile){
-	mesh msh(inputfile);
-	object.kdtree = new KDTreeCPU(
-		msh.numTris,
-		msh.tris,
-		msh.numVerts,
-		msh.verts
-	);
-	object.bounds = msh.bb;
-}
-
 void loadWorld(vector<Obj> &world, json &scene){
 	for (auto& object_json : scene["scene"]){
 		Obj object;
 		object.kdtree = nullptr;
 		string filepath = scene["models"][(string)object_json["name"]];
-		cerr << "Loading " << object_json << endl;
+		cerr << "Loading " << object_json << "(" << filepath << ")" << endl;
 		if (object_json["mode"] == "kdtree"){
-			loadKDTree(object, filepath+".obj");
+			//loadKDTree(object, filepath+".obj");
+			mesh msh(filepath+".obj");
+			for (auto& el : object_json.items()){
+				if (el.key() == "translate")
+					msh.translate(vec3(el.value()[0], el.value()[1], el.value()[2]));
+				else if (el.key() == "scale")
+					msh.scale(el.value());
+			}
+			object.kdtree = new KDTreeCPU(
+				msh.numTris,
+				msh.tris,
+				msh.numVerts,
+				msh.verts
+			);
+			object.bounds = msh.bb;
 		} else {
 			vector<Triangle> triangles;
 			loadTriangles(filepath + ".obj", triangles);
@@ -592,10 +601,6 @@ int main(int argc, char **argv){
 		.scan<'u', unsigned int>()
 		.default_value(1280u)
 		.help("SDL window width");
-	renderer.add_argument("-sh", "--sdl-height")
-		.scan<'u', unsigned int>()
-		.default_value(960u)
-		.help("SDL window height");
 	renderer.add_argument("-a", "--antialiasing")
 		.scan<'u', unsigned int>()
 		.default_value(2u)
@@ -628,7 +633,7 @@ int main(int argc, char **argv){
 	auto image_height = renderer.get<unsigned int>("--height");
 	auto aliasing_iters = renderer.get<unsigned int>("--antialiasing");
 	auto window_width = renderer.get<unsigned int>("--sdl-width");
-	auto window_height = renderer.get<unsigned int>("--sdl-height");
+	auto window_height = window_width * (image_width / image_height);
 	auto sceneFilePath = renderer.get<string>("--scene");
 	auto pathpath = renderer.present("--path");
 	auto nframes = renderer.get<unsigned int>("--frames");
@@ -667,6 +672,8 @@ int main(int argc, char **argv){
 	const float eye_frame_distance = 1; //or focal length?
 	const vec3 frame_topleft = vec3(-frame_width/2, frame_height/2, eye_frame_distance);
 
+	float rotY = 0;
+	float rotX = 0;
 	if (!pathpath){
 		if (SDL_Init(SDL_INIT_VIDEO) < 0){
 			cerr << "Error initalising SDL" << SDL_GetError() << endl;
@@ -693,8 +700,6 @@ int main(int argc, char **argv){
 
 		camera_origin = vec3(0,0.5*(sceneBounds.max.y() + sceneBounds.min.y()),-1);
 
-		int rotY = 0;
-		int rotX = 0;
 		while (1){
 			auto startFrame = std::chrono::system_clock::now();
 
@@ -713,7 +718,6 @@ int main(int argc, char **argv){
 							0
 						);
 						ray = rotateX(rotateY(ray, rotY), rotX);
-						//ray = rotateY(ray, rotY);
 						average += get_color(camera_origin, ray, world);
 					}
 					average /= aliasing_iters;
@@ -738,19 +742,23 @@ int main(int argc, char **argv){
 								camera_origin += rotateX(rotateY(vec3(0,0,-0.02), rotY), rotX);
 								break;
 							case SDL_SCANCODE_A:
-								rotY--;
+								rotY-=1;
 								break;
 							case SDL_SCANCODE_D:
-								rotY++;
+								rotY+=1;
 								break;
 							case SDL_SCANCODE_UP:
-								rotX--;
+								rotX-=1;
 								break;
 							case SDL_SCANCODE_DOWN:
-								rotX++;
+								rotX+=1;
 								break;
 							case SDL_SCANCODE_H:
-								cerr << camera_origin << ", " << rotateX(rotateY(vec3(0,0,eye_frame_distance), rotY), rotX) << endl;
+								json frame = {
+									{"goto", {camera_origin[0], camera_origin[1], camera_origin[2]}},
+									{"lookat", {{"x", rotX}, {"y", rotY}}}
+								};
+								cout << frame << endl;
 						}
 				}
 			}
@@ -769,7 +777,8 @@ int main(int argc, char **argv){
 
 			auto endFrame = std::chrono::system_clock::now();
 			std::chrono::duration<float> elapsed_seconds = endFrame-startFrame;
-			cerr << "fps: " << 1. / elapsed_seconds.count() << endl;
+			cerr << "fps: " << 1. / elapsed_seconds.count() << " (" <<
+			elapsed_seconds.count() << "s) " << endl;
 		}
 	} else {
 		ifstream pathFile(*pathpath);
@@ -787,16 +796,14 @@ int main(int argc, char **argv){
 			path["start"][1],
 			path["start"][2]
 		);
-
-		vec3 camera_ray = vec3(
-			path["look"][0],
-			path["look"][1],
-			path["look"][2]
-		);
+		
+		rotX = path["look"]["x"];
+		rotY = path["look"]["y"];
 
 		unsigned int frames_per_move = nframes / path["path"].size();
 		vec3 camera_end = camera_origin;
-		vec3 camera_end_look = camera_ray;
+		float rotX_end = rotX;
+		float rotY_end = rotY;
 		int count = 0;
 		for (auto& object_json : path["path"]){
 			camera_end = object_json.contains("goto") ? vec3(
@@ -804,14 +811,16 @@ int main(int argc, char **argv){
 				object_json["goto"][1],
 				object_json["goto"][2]
 			) : camera_end;
-			camera_end_look = object_json.contains("lookat") ? vec3(
-				object_json["lookat"][0],
-				object_json["lookat"][1],
-				object_json["lookat"][2]
-			) : camera_end;
+			rotX_end = object_json.contains("lookat") ? (float)object_json["lookat"]["x"] : rotX_end;
+			rotY_end = object_json.contains("lookat") ? (float)object_json["lookat"]["y"] : rotY_end;
 
-			vec3 look_increment = (camera_end_look - camera_ray) / frames_per_move;
+			float rotX_increment = (rotX_end - rotX) / frames_per_move;
+			float rotY_increment = (rotY_end - rotY) / frames_per_move;
 			vec3 move_increment = (camera_end - camera_origin) / frames_per_move;
+
+			cerr << "move inc: " << move_increment << endl;
+			cerr << "rotX_inc: " << rotX_increment << endl;
+			cerr << "rotY_inc: " << rotY_increment << endl;
 
 			for (int frame = 0;frame < frames_per_move;++frame){
 				ofstream ppm("img_"+to_string(count++)+".ppm");
@@ -833,7 +842,8 @@ int main(int argc, char **argv){
 								frame_width * ((x+drand()) / (float)image_width),
 								-frame_height * ((y+drand()) / (float)image_height),
 								0
-							) + camera_ray;
+							);
+							ray = rotateX(rotateY(ray, rotY), rotX);
 							average += get_color(camera_origin, ray, world);
 						}
 						average /= aliasing_iters;
@@ -846,9 +856,14 @@ int main(int argc, char **argv){
 				for (int i = 0;i < image_width * image_height;++i)
 					ppm << (int)image[3*i + 0] << " " << (int)image[3*i + 1] << " " << (int)image[3*i + 2] << endl;
 				ppm.close();
+				delete[] image;
 
 				camera_origin += move_increment;
-				camera_ray += look_increment;
+				rotX += rotX_increment;
+				rotY += rotY_increment;
+				cerr << camera_origin << endl;
+				cerr << rotateX(rotateY(vec3(0,0,eye_frame_distance), rotY), rotX) << endl;
+				cerr << rotX << " " << rotY << endl;
 			}
 		}
 	}

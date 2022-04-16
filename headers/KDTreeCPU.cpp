@@ -232,6 +232,9 @@ KDTreeNode* KDTreeCPU::constructTreeMedianSpaceSplit( int num_tris, int *tri_ind
 
 	// Base case--Number of triangles in node is small enough.
 	if ( num_tris <= NUM_TRIS_PER_NODE ) {
+		#ifdef DEBUG
+			cerr << "inside" << endl;
+		#endif
 		node->is_leaf_node = true;
 
 		// Update number of tree levels.
@@ -296,6 +299,16 @@ KDTreeNode* KDTreeCPU::constructTreeMedianSpaceSplit( int num_tris, int *tri_ind
 			max_tri_val = getMaxTriValue( tri_indices[i], Z_AXIS );
 		}
 
+//		if (min_tri_val < median_val){
+//			temp_left_tri_indices[i] = tri_indices[i];
+//			++left_tri_count;
+//			temp_right_tri_indices[i] = -1; 
+//		} else {
+//			temp_right_tri_indices[i] = tri_indices[i];
+//			++right_tri_count;
+//			temp_left_tri_indices[i] = -1;
+//		}
+
 		// Update temp_left_tri_indices.
 		if ( min_tri_val < median_val ) {
 			temp_left_tri_indices[i] = tri_indices[i];
@@ -337,8 +350,22 @@ KDTreeNode* KDTreeCPU::constructTreeMedianSpaceSplit( int num_tris, int *tri_ind
 	delete[] temp_right_tri_indices;
 
 	// Recurse.
+	#ifdef DEBUG
+		if (curr_depth > 1000){
+			cerr << "Something is wrong (depth = " << curr_depth << ")" << endl;
+			cerr << "left count: " << left_tri_count << endl;
+			cerr << "right count: " << right_tri_count << endl;
+			cerr << "total: " << num_tris << endl;
+		}
+	#endif
 	node->left = constructTreeMedianSpaceSplit( left_tri_count, left_tri_indices, left_bbox, curr_depth + 1 );
+	#ifdef DEBUG
+		cerr << "calling right" << endl;
+	#endif
 	node->right = constructTreeMedianSpaceSplit( right_tri_count, right_tri_indices, right_bbox, curr_depth + 1 );
+	#ifdef DEBUG
+		cerr << "exiting" << endl;
+	#endif
 
 	// Set node ID.
 	node->id = num_nodes;

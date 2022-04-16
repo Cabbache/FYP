@@ -19,10 +19,10 @@
 			"scale": 0.8,
 			"translate": [0.6,0,0],
 			"mode": "sdf",
-			"name": "kitten",
 			"color": [0, 255, 255],
 			"isLight": false,
-			"absorption": 0.1
+			"absorption": 0.1,
+			"name": "kitten"
 		}
 	]
 }

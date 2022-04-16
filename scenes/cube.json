@@ -1,0 +1,103 @@
+{
+	"models":{
+		"bunny1k": "models/bunny_1k",
+		"bunny40k": "models/bunny_40k",
+		"dragon": "models/dragon_fixed",
+		"kitten": "models/kitten_50k",
+		"sibenik": "models/fixed_sibenik",
+		"plane": "models/plane",
+		"cube": "models/single_box"
+	},
+	"scene":[
+		{
+			"scale": 0.1,
+			"name": "cube",
+			"translate": [-0.8,0,0.2],
+			"color": [0,255,0],
+			"isLight": false,
+			"absorption": 0.1,
+			"mode": "kdtree"
+		},
+		{
+			"scale": 0.03,
+			"name": "cube",
+			"translate": [-0.21,0.23,0.2],
+			"color": [255,0,255],
+			"isLight": false,
+			"absorption": 0.1,
+			"mode": "kdtree"
+		},
+		{
+			"scale": 0.03,
+			"name": "cube",
+			"translate": [0,0.215,0.2],
+			"color": [255,0,255],
+			"isLight": false,
+			"absorption": 0.1,
+			"mode": "kdtree"
+		},
+		{
+			"scale": 0.06,
+			"name": "bunny40k",
+			"translate": [0.12,0.215,0.2],
+			"color": [255,0,0],
+			"isLight": false,
+			"absorption": 0.3,
+			"mode": "sdf"
+		},
+		{
+			"scale": 0.1,
+			"name": "cube",
+			"translate": [-0.21,0.05,0.2],
+			"color": [255,255,0],
+			"isLight": false,
+			"absorption": 0.1,
+			"mode": "kdtree"
+		},
+		{
+			"scale": 0.1,
+			"name": "cube",
+			"translate": [0,0.05,0.2],
+			"color": [255,255,0],
+			"isLight": false,
+			"absorption": 0.1,
+			"mode": "kdtree"
+		},
+		{
+			"scale": 0.1,
+			"name": "cube",
+			"translate": [0.21,0.05,0.2],
+			"color": [255,255,0],
+			"isLight": false,
+			"absorption": 0.6,
+			"mode": "kdtree"
+		},
+		{
+			"scale": 0.05,
+			"name": "bunny1k",
+			"translate": [0.36,0.05,0.2],
+			"color": [255,255,255],
+			"isLight": true,
+			"absorption": 0,
+			"mode": "sdf"
+		},
+		{
+			"scale": 1,
+			"translate": [0,0.2,0],
+			"name": "bunny40k",
+			"color": [255,255,255],
+			"isLight": true,
+			"absorption": 0,
+			"mode": "sdf"
+		},
+		{
+			"scale": 1,
+			"translate": [0,-1.4,0],
+			"name": "bunny40k",
+			"color": [255,255,255],
+			"isLight": true,
+			"absorption": 0,
+			"mode": "sdf"
+		}
+	]
+}

@@ -108,3 +108,17 @@ mesh::mesh(string fileName){
 	bb.min = min;
 	bb.max = max;
 }
+
+void mesh::translate(vec3 translation){
+	for (int i = 0;i < this->numVerts;++i)
+		this->verts[i] += translation;
+	this->bb.min += translation;
+	this->bb.max += translation;
+}
+
+void mesh::scale(float scale){
+	for (int i = 0;i < this->numVerts;++i)
+		this->verts[i] *= scale;
+	this->bb.min *= scale;
+	this->bb.max *= scale;
+}

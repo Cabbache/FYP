@@ -18,6 +18,8 @@ public:
 	mesh(std::string fileName);
 	std::vector<std::string> tokenizeString(std::string str);
 	std::istream& safeGetline(std::istream& is, std::string& t);
+	void translate(vec3);
+	void scale(float);
 
 	int numTris, numVerts;
 	vec3* tris;
