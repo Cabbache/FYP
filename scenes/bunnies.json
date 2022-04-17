@@ -9,42 +9,82 @@
 		{
 			"scale": 0.8,
 			"translate": [0,0,0],
-			"name": "bunny1k"
+			"name": "bunny40k",
+			"isLight": false,
+			"absorption": 0.2,
+			"specular": 0.4,
+			"color": [255,0,0],
+			"mode": "sdf"
 		},
 		{
 			"scale": 0.8,
 			"translate": [0,0,1],
-			"name": "bunny1k"
+			"name": "bunny40k",
+			"isLight": false,
+			"absorption": 0.2,
+			"specular": 0.4,
+			"color": [255,255,0],
+			"mode": "sdf"
 		},
 		{
 			"scale": 0.8,
 			"translate": [0,1,0],
-			"name": "bunny1k"
+			"name": "bunny40k",
+			"isLight": false,
+			"absorption": 0.2,
+			"specular": 0.4,
+			"color": [255,0,255],
+			"mode": "sdf"
 		},
 		{
 			"scale": 0.8,
 			"translate": [0,1,1],
-			"name": "bunny1k"
+			"name": "bunny40k",
+			"isLight": true,
+			"absorption": 0,
+			"specular": 0.4,
+			"color": [255,255,255],
+			"mode": "sdf"
 		},
 		{
 			"scale": 0.8,
 			"translate": [1,0,0],
-			"name": "bunny1k"
+			"name": "bunny40k",
+			"isLight": false,
+			"absorption": 0.2,
+			"specular": 0.4,
+			"color": [0,255,255],
+			"mode": "sdf"
 		},
 		{
 			"scale": 0.8,
 			"translate": [1,0,1],
-			"name": "bunny1k"
+			"name": "bunny40k",
+			"isLight": false,
+			"absorption": 0.2,
+			"specular": 0.4,
+			"color": [0,255,0],
+			"mode": "sdf"
 		},
 		{
 			"scale": 0.8,
 			"translate": [1,1,0],
-			"name": "bunny1k"
+			"name": "bunny40k",
+			"isLight": false,
+			"absorption": 0.2,
+			"specular": 0.4,
+			"color": [0,0,255],
+			"mode": "sdf"
 		},
 		{
 			"scale": 0.8,
 			"translate": [1,1,1],
-			"name": "bunny1k"
+			"name": "bunny40k",
+			"isLight": false,
+			"absorption": 0.2,
+			"specular": 0.4,
+			"color": [128,50,60],
+			"mode": "sdf"
 		}
 	]
 }

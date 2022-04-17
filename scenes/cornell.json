@@ -1,0 +1,34 @@
+{
+	"models":{
+		"bunny1k": "models/bunny_1k",
+		"bunny40k": "models/bunny_40k",
+		"dragon": "models/dragon_fixed",
+		"kitten": "models/kitten_50k",
+		"sibenik": "models/fixed_sibenik",
+		"plane": "models/plane",
+		"cube": "models/single_box",
+		"cornell": "models/cornell_box"
+	},
+	"scene":[
+		{
+			"scale": 1,
+			"name": "cornell",
+			"translate": [0,0,0],
+			"color": [128,255,0],
+			"isLight": false,
+			"absorption": 0.1,
+			"specular": 0.5,
+			"mode": "kdtree"
+		},
+		{
+			"scale": 1,
+			"name": "bunny1k",
+			"translate": [2,0,0],
+			"color": [255,255,255],
+			"isLight": true,
+			"absorption": 0,
+			"specular": 0,
+			"mode": "sdf"
+		}
+	]
+}

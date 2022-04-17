@@ -116,7 +116,10 @@ void mesh::translate(vec3 translation){
 	this->bb.max += translation;
 }
 
-void mesh::scale(float scale){
+void mesh::scale(float maxdimension){
+	vec3 diff = this->bb.max - this->bb.min;
+	float scale = maxdimension / max(diff[0], max(diff[1], diff[2]));
+
 	for (int i = 0;i < this->numVerts;++i)
 		this->verts[i] *= scale;
 	this->bb.min *= scale;

@@ -32,17 +32,16 @@ uint32_t total_hits = 0;
 //maps world coordinates to sdf coordinates and returns value of sdf
 bool getValue(const SDF &sdf, const vec3 &world, SDFResult &res){
 	if(
-		world.x() < sdf.origin.x() || world.x() >= sdf.corner.x() - sdf.resolution/2 ||
-		world.y() < sdf.origin.y() || world.y() >= sdf.corner.y() - sdf.resolution/2 ||
-		world.z() < sdf.origin.z() || world.z() >= sdf.corner.z() - sdf.resolution/2
+		world.x() < sdf.origin.x() || world.x() >= sdf.corner.x() - sdf.resolution ||
+		world.y() < sdf.origin.y() || world.y() >= sdf.corner.y() - sdf.resolution ||
+		world.z() < sdf.origin.z() || world.z() >= sdf.corner.z() - sdf.resolution
 	){
 		return res.inside = false;
 	}
-	res.inside = true;
 	vec3 distance = world - sdf.origin;
 	distance /= sdf.resolution;
 	res.value = sdf.values[(int)round(distance[0])][(int)round(distance[1])][(int)round(distance[2])];
-	return true;
+	return res.inside = true;
 }
 
 //loads sdf from sdf file
@@ -374,14 +373,24 @@ vec3 get_color(vec3 origin, vec3 ray, const vector<Obj> &world, int depth=0){
 		)
 	);
 	float dotraynormal = dot(ray, normal);
-	//vec3 reflected = ray - 2*dotraynormal*normal;
-	int counts = 3;
-	vec3 color(0,0,0);
-	for (int i = 0;i < counts;++i)
-		color += get_color(hitpoint, normal + vec3(drand(), drand(), drand()), world, depth+1);
-	color /= counts;
+	vec3 reflected = ray - 2*dotraynormal*normal;
+	int bounces = 3;
+	vec3 diffuse_color(0,0,0);
+	for (int i = 0;i < bounces;++i)
+		diffuse_color += get_color(hitpoint, normal + vec3(drand(), drand(), drand()), world, depth+1);
+	diffuse_color /= bounces;
+	vec3 specular_color;
+	if (collided->material.specularity != 0.)
+		specular_color = get_color(hitpoint, reflected, world, depth+1);
+	else
+		specular_color = vec3(0,0,0);
 	return (1-collided->material.absorption) *
-	(color * collided->material.color/255) *
+	(
+		(
+			diffuse_color*(1-collided->material.specularity) + specular_color*(collided->material.specularity)
+		) * 
+		collided->material.color/255.
+	) *
 	dotraynormal / (ray.length() * normal.length()); //lambert cosine
 	//return get_color(hitpoint, reflected, world, ++depth);
 
@@ -577,6 +586,7 @@ void loadWorld(vector<Obj> &world, json &scene){
 		);
 		cerr << "color: " << object.material.color << endl;
 		object.material.absorption = object_json["absorption"];
+		object.material.specularity = object_json["specular"];
 
 		cerr << "bounds: " << object.bounds.min << ", " << object.bounds.max << endl;
 		world.push_back(object);
@@ -778,7 +788,7 @@ int main(int argc, char **argv){
 			auto endFrame = std::chrono::system_clock::now();
 			std::chrono::duration<float> elapsed_seconds = endFrame-startFrame;
 			cerr << "fps: " << 1. / elapsed_seconds.count() << " (" <<
-			elapsed_seconds.count() << "s) " << endl;
+			elapsed_seconds.count() << "s) " << camera_origin << endl;
 		}
 	} else {
 		ifstream pathFile(*pathpath);
