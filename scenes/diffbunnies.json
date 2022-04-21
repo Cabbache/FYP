@@ -1,0 +1,40 @@
+{
+	"models":{
+		"bunny1k": "models/bunny_1k",
+		"bunny40k": "models/bunny_40k",
+		"dragon": "models/dragon_fixed",
+		"kitten": "models/kitten_50k"
+	},
+	"scene":[
+		{
+			"scale": 0.8,
+			"translate": [0,0,0],
+			"name": "bunny40k",
+			"isLight": false,
+			"absorption": 0.2,
+			"specular": 0.4,
+			"color": [255,0,0],
+			"mode": "kdtree"
+		},
+		{
+			"scale": 0.8,
+			"translate": [1,0,0],
+			"name": "bunny40k",
+			"isLight": false,
+			"absorption": 0.2,
+			"specular": 0.4,
+			"color": [0,255,0],
+			"mode": "kdtree"
+		},
+		{
+			"scale": 2.5,
+			"translate": [0.5,3,0],
+			"name": "bunny40k",
+			"isLight": true,
+			"absorption": 0.2,
+			"specular": 0.4,
+			"color": [255,255,255],
+			"mode": "kdtree"
+		}
+	]
+}

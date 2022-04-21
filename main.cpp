@@ -360,7 +360,7 @@ vec3 get_color(vec3 origin, vec3 ray, const vector<Obj> &world, int depth=0){
 	end_iter:;
 	//if no triangles hit, color the background
 	if (!closest.hit)
-		return vec3(0,0,0);
+		return vec3(128,128,128);
 
 	if (collided->material.isLight)
 		return collided->material.color;
@@ -815,6 +815,8 @@ int main(int argc, char **argv){
 		float rotX_end = rotX;
 		float rotY_end = rotY;
 		int count = 0;
+
+		float total_seconds = 0;
 		for (auto& object_json : path["path"]){
 			camera_end = object_json.contains("goto") ? vec3(
 				object_json["goto"][0],
@@ -828,12 +830,14 @@ int main(int argc, char **argv){
 			float rotY_increment = (rotY_end - rotY) / frames_per_move;
 			vec3 move_increment = (camera_end - camera_origin) / frames_per_move;
 
+			cerr << "---" << endl;
 			cerr << "move inc: " << move_increment << endl;
 			cerr << "rotX_inc: " << rotX_increment << endl;
 			cerr << "rotY_inc: " << rotY_increment << endl;
 
 			for (int frame = 0;frame < frames_per_move;++frame){
 				ofstream ppm("img_"+to_string(count++)+".ppm");
+				cerr << count << " / " << nframes << endl;
 
 				//ppm image headers
 				ppm << "P3" << endl
@@ -841,6 +845,7 @@ int main(int argc, char **argv){
 				<< "255" << endl;
 				uint8_t *image = new uint8_t[image_width * image_height * 3];
 
+				auto startTime = std::chrono::system_clock::now();
 				#pragma omp parallel for num_threads(64)
 				for (int y = 0;y < image_height;y++){
 					for (int x = 0;x < image_width;x++){
@@ -862,6 +867,10 @@ int main(int argc, char **argv){
 						image[3*(y*image_width + x) + 2] = average[2];
 					}
 				}	
+				auto endTime = std::chrono::system_clock::now();
+				std::chrono::duration<float> elapsed_seconds = endTime-startTime;
+				cerr << "duration: " << elapsed_seconds.count() << endl;
+				total_seconds += elapsed_seconds.count();
 
 				for (int i = 0;i < image_width * image_height;++i)
 					ppm << (int)image[3*i + 0] << " " << (int)image[3*i + 1] << " " << (int)image[3*i + 2] << endl;
@@ -871,11 +880,13 @@ int main(int argc, char **argv){
 				camera_origin += move_increment;
 				rotX += rotX_increment;
 				rotY += rotY_increment;
-				cerr << camera_origin << endl;
-				cerr << rotateX(rotateY(vec3(0,0,eye_frame_distance), rotY), rotX) << endl;
-				cerr << rotX << " " << rotY << endl;
+
+				cerr << "camera position: " << camera_origin << endl;
+				cerr << "angles: " << rotX << " " << rotY << endl;
 			}
 		}
+		cerr << "Done. Total rendering duration: " << endl;
+		cout << total_seconds << endl;
 	}
 	return 0;
 }

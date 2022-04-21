@@ -66,6 +66,8 @@ int main(int argc, char **argv){
 		return 2;
 	}
 
+	double average = 0;
+	int count = 0;
 	while (1){
 		Mat frame1;
 		Mat frame2;
@@ -80,8 +82,12 @@ int main(int argc, char **argv){
 		if (frame1.empty()) break;
 		
 		Scalar mssim = getMSSIM(frame1, frame2);
-		cout << mssim << endl;
+		cerr << mssim << endl;
+		average += mssim[0] + mssim[1] + mssim[2];
+		count += 3;
 	}
 
+	cerr << "Average ssim: " << endl;
+	cout << (average / count) << endl;
 	return 0;
 }
