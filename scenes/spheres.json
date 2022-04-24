@@ -1,0 +1,40 @@
+{
+	"models":{
+		"bunny40k": "models/bunny_40k",
+		"sphere": "models/sphere",
+		"sphere30k": "models/sphere_30k"
+	},
+	"scene":[
+		{
+			"scale": 0.9,
+			"translate": [0,0,0],
+			"name": "sphere",
+			"isLight": false,
+			"absorption": 0,
+			"specular": 0,
+			"color": [255,0,0],
+			"mode": "kdtree",
+			"rfi": 1.3
+		},
+		{
+			"scale": 1,
+			"translate": [1.5,0,0],
+			"name": "sphere",
+			"isLight": true,
+			"absorption": 0,
+			"specular": 0,
+			"color": [255,0,0],
+			"mode": "kdtree"
+		},
+		{
+			"scale": 1,
+			"translate": [0,0,1.5],
+			"name": "bunny40k",
+			"isLight": false,
+			"absorption": 0,
+			"specular": 0,
+			"color": [255,0,0],
+			"mode": "kdtree"
+		}
+	]
+}

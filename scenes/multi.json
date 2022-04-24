@@ -1,0 +1,93 @@
+{
+	"models":{
+		"bunny40k": "models/bunny_40k",
+		"sphere": "models/sphere",
+		"sphere30k": "models/sphere_30k",
+		"dragon": "models/dragon_fixed",
+		"kitten": "models/kitten_50k",
+		"cube": "models/single_box"
+	},
+	"scene":[
+		{
+			"scale": 1,
+			"translate": [1.5,0,-0.5],
+			"name": "bunny40k",
+			"isLight": false,
+			"absorption": 0,
+			"specular": 0,
+			"color": [255,0,0],
+			"mode": "kdtree",
+			"rfi": 1.9
+		},
+		{
+			"scale": 1,
+			"translate": [0,0,0],
+			"name": "sphere",
+			"isLight": false,
+			"absorption": 0,
+			"specular": 0,
+			"color": [255,0,0],
+			"mode": "kdtree"
+		},
+		{
+			"scale": 6,
+			"translate": [0,0,-3.8],
+			"name": "cube",
+			"isLight": false,
+			"absorption": 0,
+			"specular": 0,
+			"color": [255,255,255],
+			"mode": "kdtree"
+		},
+		{
+			"scale": 3,
+			"translate": [0,0,1.5],
+			"name": "sphere",
+			"isLight": true,
+			"absorption": 0,
+			"specular": 0,
+			"color": [255,255,255],
+			"mode": "kdtree"
+		},
+		{
+			"scale": 115,
+			"translate": [60,-60,1.5],
+			"name": "dragon",
+			"isLight": false,
+			"absorption": 0,
+			"specular": 0,
+			"color": [255,0,0],
+			"mode": "kdtree"
+		},
+		{
+			"scale": 115,
+			"translate": [-60,-60,1.5],
+			"name": "dragon",
+			"isLight": false,
+			"absorption": 0,
+			"specular": 0,
+			"color": [0,255,0],
+			"mode": "kdtree"
+		},
+		{
+			"scale": 115,
+			"translate": [0,-60,60],
+			"name": "kitten",
+			"isLight": false,
+			"absorption": 0,
+			"specular": 0,
+			"color": [0,255,0],
+			"mode": "kdtree"
+		},
+		{
+			"scale": 115,
+			"translate": [0,-60,-60],
+			"name": "kitten",
+			"isLight": false,
+			"absorption": 0,
+			"specular": 0,
+			"color": [0,0,255],
+			"mode": "kdtree"
+		}
+	]
+}

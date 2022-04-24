@@ -14,9 +14,11 @@ set -e
 ./compile.sh
 rm img_*.ppm || :
 SPATH="path.json"
+#SCENE="spheres.json"
+SCENE="multi.json"
 #SCENE="dragon_simple.json"
 #SCENE="bunnies.json"
-SCENE="diffbunnies.json"
+#SCENE="diffbunnies.json"
 #SCENE="bunnies_simple.json"
 #SCENE="cornell.json"
 #SCENE="cube.json"
@@ -34,9 +36,11 @@ elif [[ "$1" == "path" ]]
 then
 	#./build/renderer -s "scenes/$SCENE" -w 1280 -h 960 -a 2 -sg 1.3 -p "$SPATH" -f 1200
 	#./build/renderer -s "scenes/$SCENE" -w 640 -h 480 -a 1 -sg 1.3 -p "$SPATH" -f 600
-	./build/renderer -s "scenes/$SCENE" -w 320 -h 240 -a 1 -sg 7.0 -p "$SPATH" -f 600
+	#./build/renderer -s "scenes/$SCENE" -w 320 -h 240 -a 1 -sg 7.0 -p "$SPATH" -f 600
 	#./build/renderer -s "scenes/$SCENE" -w 300 -h 300 -a 1 -sg 1.8 -p "$SPATH" -f 30
 	#./build/renderer -s "scenes/$SCENE" -w 150 -h 150 -a 1 -sg 1.8 -p "$SPATH" -f 60
+
+	./build/renderer -s "scenes/$SCENE" -w 640 -h 480 -a 10 -sg 7.0 -p "$SPATH" -f 600
 else
 	./build/renderer -s "scenes/$SCENE" -w 150 -h 150 -a 1 -sg 1.3
 fi

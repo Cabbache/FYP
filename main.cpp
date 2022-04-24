@@ -1,4 +1,4 @@
-#define TINYOBJLOADER_IMPLEMENTATION // define this in only *one* .cc
+#define TINYOBJLOADER_IMPLEMENTATION
 
 #include <getopt.h>
 #include <iostream>
@@ -30,7 +30,7 @@ uint32_t total_cells = 0;
 uint32_t total_hits = 0;
 
 //maps world coordinates to sdf coordinates and returns value of sdf
-bool getValue(const SDF &sdf, const vec3 &world, SDFResult &res){
+bool getValue(const SDF &sdf, vec3 &world, SDFResult &res){
 	if(
 		world.x() < sdf.origin.x() || world.x() >= sdf.corner.x() - sdf.resolution ||
 		world.y() < sdf.origin.y() || world.y() >= sdf.corner.y() - sdf.resolution ||
@@ -223,7 +223,7 @@ void marchSDF(const SDF &sdf, hitInfo &info){
 	}
 }
 
-vec3 get_color(vec3 origin, vec3 ray, const vector<Obj> &world, int depth=0){
+vec3 get_color(vec3 origin, vec3 ray, const vector<Obj> &world, int depth=0, bool exiting=false){
 	if (depth > 4)
 		return vec3(0,0,0);
 
@@ -358,9 +358,12 @@ vec3 get_color(vec3 origin, vec3 ray, const vector<Obj> &world, int depth=0){
 		}
 	}
 	end_iter:;
+
 	//if no triangles hit, color the background
+	//if (!closest.hit)
+	//	return vec3(128,128,128);
 	if (!closest.hit)
-		return vec3(128,128,128);
+		return (vec3(1,1,1)+unit_vector(ray))*127;
 
 	if (collided->material.isLight)
 		return collided->material.color;
@@ -374,24 +377,45 @@ vec3 get_color(vec3 origin, vec3 ray, const vector<Obj> &world, int depth=0){
 	);
 	float dotraynormal = dot(ray, normal);
 	vec3 reflected = ray - 2*dotraynormal*normal;
-	int bounces = 3;
-	vec3 diffuse_color(0,0,0);
-	for (int i = 0;i < bounces;++i)
-		diffuse_color += get_color(hitpoint, normal + vec3(drand(), drand(), drand()), world, depth+1);
-	diffuse_color /= bounces;
+
 	vec3 specular_color;
-	if (collided->material.specularity != 0.)
+	if ((collided->material.specularity != 0. && !collided->material.is_refractive) || (collided->material.is_refractive && !exiting))
 		specular_color = get_color(hitpoint, reflected, world, depth+1);
 	else
 		specular_color = vec3(0,0,0);
-	return (1-collided->material.absorption) *
-	(
+	
+	if (collided->material.is_refractive){
+		float rfi = collided->material.refractive_index;
+		//SDFResult res;
+		//getValue(collided->sdf, origin, res);
+		if (exiting)
+			rfi = 1. / rfi;
+		rfi = 2. - rfi;
+		vec3 refracted = (ray*rfi - normal*(-dotraynormal + rfi*dotraynormal));
+		//float sqr = 1 - rfi*rfi*(1 - dotraynormal*dotraynormal);
+		//if (sqr < 0)
+		//	return vec3(0,0,0);
+		//vec3 refracted = sqrt(sqr)*normal + rfi*(ray - dotraynormal*normal);
+		//if (collided->kdtree == nullptr)
+		//	return get_color(hitpoint + unit_vector(refracted) * collided->sdf.resolution, refracted, world, depth, !exiting);
+		//else
+			return get_color(hitpoint + unit_vector(refracted) * 0.0001, refracted, world, depth, !exiting);
+	} else {
+		int bounces = 3;
+		vec3 diffuse_color(0,0,0);
+		for (int i = 0;i < bounces;++i)
+			diffuse_color += get_color(hitpoint, normal + vec3(drand(), drand(), drand()), world, depth+1);
+		diffuse_color /= bounces;
+
+		return (1-collided->material.absorption) *
 		(
-			diffuse_color*(1-collided->material.specularity) + specular_color*(collided->material.specularity)
-		) * 
-		collided->material.color/255.
-	) *
-	dotraynormal / (ray.length() * normal.length()); //lambert cosine
+			(
+				diffuse_color*(1-collided->material.specularity) + specular_color*(collided->material.specularity)
+			) * 
+			collided->material.color/255.
+		) *
+		dotraynormal / (ray.length() * normal.length()); //lambert cosine
+	}
 	//return get_color(hitpoint, reflected, world, ++depth);
 
 	//if hit border of non mirror triangle, make border black
@@ -585,8 +609,11 @@ void loadWorld(vector<Obj> &world, json &scene){
 			object_json["color"][2]
 		);
 		cerr << "color: " << object.material.color << endl;
-		object.material.absorption = object_json["absorption"];
-		object.material.specularity = object_json["specular"];
+		object.material.absorption = object_json.contains("absorption") ? (float)object_json["absorption"]:0;
+		object.material.specularity = object_json.contains("specular") ? (float)object_json["specular"]:0;
+		
+		if (object.material.is_refractive = object_json.contains("rfi"))
+			object.material.refractive_index = object_json["rfi"];
 
 		cerr << "bounds: " << object.bounds.min << ", " << object.bounds.max << endl;
 		world.push_back(object);
@@ -762,6 +789,22 @@ int main(int argc, char **argv){
 								break;
 							case SDL_SCANCODE_DOWN:
 								rotX+=1;
+								break;
+							case SDL_SCANCODE_N:
+								for (auto &obj : world){
+									if (obj.material.is_refractive){
+										obj.material.refractive_index += 0.001;
+										cerr << obj.material.refractive_index << endl;
+									}
+								}
+								break;
+							case SDL_SCANCODE_M:
+								for (auto &obj : world){
+									if (obj.material.is_refractive){
+										obj.material.refractive_index -= 0.001;
+										cerr << obj.material.refractive_index << endl;
+									}
+								}
 								break;
 							case SDL_SCANCODE_H:
 								json frame = {

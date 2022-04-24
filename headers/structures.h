@@ -135,6 +135,8 @@ class KDTreeCPU;
 
 typedef struct Material{
 	bool isLight;
+	bool is_refractive;
+	float refractive_index;
 	float specularity; //0 to 1
 	float absorption; //0 to 1
 	vec3 color;
