@@ -92,15 +92,22 @@ int main(int argc, char **argv){
 		int slice[(int)sdf.dimensions.y()][(int)sdf.dimensions.z()];
 
 		//figure min and max
-		float minvalue, maxvalue;
-		minvalue = maxvalue = sdf.values[sliceX][0][0];
+		float minvalue_in, maxvalue_in, minvalue_out, maxvalue_out;
+		minvalue_in = maxvalue_in = minvalue_out = maxvalue_out = sdf.values[sliceX][0][0];
 		for (int y = 0;y < sdf.dimensions.y();y++){
 			for (int z = 0;z < sdf.dimensions.z();z++){
 				float value = sdf.values[sliceX][y][z];
-				if (value > maxvalue)
-					maxvalue = value;
-				if (value < minvalue)
-					minvalue = value;
+				if (value > 0){
+					if (value > maxvalue_out)
+						maxvalue_out = value;
+					if (value < minvalue_out)
+						minvalue_out = value;
+				} else {
+					if (value > maxvalue_in)
+						maxvalue_in = value;
+					if (value < minvalue_in)
+						minvalue_in = value;
+				}
 			}
 		}
 
@@ -108,11 +115,15 @@ int main(int argc, char **argv){
 		for (int z = 0;z < sdf.dimensions.z();z++){
 			for (int y = 0;y < sdf.dimensions.y();y++){
 				float value = sdf.values[sliceX][y][z];
-				int adjusted = (int)((value - minvalue) * (255.0 / (maxvalue - minvalue)));
+				int adjusted;
 				if (value >= 0)
-					ppm << adjusted << " " << " 0 " << " " << adjusted << endl;
+					adjusted = (int)((value - minvalue_out) * (255.0 / (maxvalue_out - minvalue_out)));
+				else 
+					adjusted = (int)((value - minvalue_in) * (255.0 / (maxvalue_in - minvalue_in)));
+				if (value >= 0)
+					ppm << adjusted << " " << adjusted << " " << adjusted << endl;
 				else
-					ppm << 255-adjusted << " 255 " << 255-adjusted << endl;
+					ppm << "0 " << (int)(0.5*adjusted) << " " << adjusted << endl;
 			}
 		}
 

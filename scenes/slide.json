@@ -6,18 +6,19 @@
 		"kitten": "models/kitten_50k",
 		"sibenik": "models/fixed_sibenik",
 		"plane": "models/plane",
-		"cube": "models/single_box"
+		"cube": "models/single_box",
+		"slide": "models/slide"
 	},
 	"scene":[
 		{
 			"scale": 0.3,
-			"name": "cube",
+			"name": "slide",
 			"translate": [0,0,0],
 			"color": [0,255,0],
 			"isLight": false,
 			"absorption": 0.1,
 			"specular": 0,
-			"mode": "sdf"
+			"mode": "kdtree"
 		}
 	]
 }

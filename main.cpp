@@ -299,9 +299,9 @@ vec3 get_color(vec3 origin, vec3 ray, const vector<Obj> &world, int depth=0, boo
 						vec3_int(
 							(
 								hitpoint_world + vec3(
-									a*ohd.first->sdf.resolution*0.25, //0.25 is close to the magic number for sres_to_gres = 3
-									b*ohd.first->sdf.resolution*0.25,
-									c*ohd.first->sdf.resolution*0.25
+									a*ohd.first->grid.resolution*1,
+									b*ohd.first->grid.resolution*1,
+									c*ohd.first->grid.resolution*1
 								)
 							) / ohd.first->grid.resolution
 						)
@@ -392,14 +392,7 @@ vec3 get_color(vec3 origin, vec3 ray, const vector<Obj> &world, int depth=0, boo
 			rfi = 1. / rfi;
 		rfi = 2. - rfi;
 		vec3 refracted = (ray*rfi - normal*(-dotraynormal + rfi*dotraynormal));
-		//float sqr = 1 - rfi*rfi*(1 - dotraynormal*dotraynormal);
-		//if (sqr < 0)
-		//	return vec3(0,0,0);
-		//vec3 refracted = sqrt(sqr)*normal + rfi*(ray - dotraynormal*normal);
-		//if (collided->kdtree == nullptr)
-		//	return get_color(hitpoint + unit_vector(refracted) * collided->sdf.resolution, refracted, world, depth, !exiting);
-		//else
-			return get_color(hitpoint + unit_vector(refracted) * 0.0001, refracted, world, depth, !exiting);
+		return get_color(hitpoint + unit_vector(refracted) * 0.0001, refracted, world, depth, !exiting);
 	} else {
 		int bounces = 3;
 		vec3 diffuse_color(0,0,0);
@@ -807,9 +800,16 @@ int main(int argc, char **argv){
 								}
 								break;
 							case SDL_SCANCODE_H:
+								float ref = 0;
+								for (auto &obj : world){
+									if (obj.material.is_refractive){
+										ref = obj.material.refractive_index;
+									}
+								}
 								json frame = {
 									{"goto", {camera_origin[0], camera_origin[1], camera_origin[2]}},
-									{"lookat", {{"x", rotX}, {"y", rotY}}}
+									{"lookat", {{"x", rotX}, {"y", rotY}}},
+									{"refract", ref}
 								};
 								cout << frame << endl;
 						}
@@ -845,22 +845,29 @@ int main(int argc, char **argv){
 		pathFile.close();
 		
 		camera_origin = vec3(
-			path["start"][0],
-			path["start"][1],
-			path["start"][2]
+			path["path"][0]["goto"][0],
+			path["path"][0]["goto"][1],
+			path["path"][0]["goto"][2]
 		);
 		
-		rotX = path["look"]["x"];
-		rotY = path["look"]["y"];
+		rotX = path["path"][0]["lookat"]["x"];
+		rotY = path["path"][0]["lookat"]["y"];
+		float rfi = path["path"][0]["refract"];
 
 		unsigned int frames_per_move = nframes / path["path"].size();
 		vec3 camera_end = camera_origin;
 		float rotX_end = rotX;
 		float rotY_end = rotY;
+		float rfi_end = rfi;
 		int count = 0;
 
 		float total_seconds = 0;
+		bool first_iter = true;
 		for (auto& object_json : path["path"]){
+			if (first_iter){
+				first_iter = false;
+				continue;
+			}
 			camera_end = object_json.contains("goto") ? vec3(
 				object_json["goto"][0],
 				object_json["goto"][1],
@@ -868,9 +875,11 @@ int main(int argc, char **argv){
 			) : camera_end;
 			rotX_end = object_json.contains("lookat") ? (float)object_json["lookat"]["x"] : rotX_end;
 			rotY_end = object_json.contains("lookat") ? (float)object_json["lookat"]["y"] : rotY_end;
+			rfi_end = object_json.contains("refract") ? (float)object_json["refract"] : rfi_end;
 
 			float rotX_increment = (rotX_end - rotX) / frames_per_move;
 			float rotY_increment = (rotY_end - rotY) / frames_per_move;
+			float rfi_increment = (rfi_end - rfi) / frames_per_move;
 			vec3 move_increment = (camera_end - camera_origin) / frames_per_move;
 
 			cerr << "---" << endl;
@@ -923,6 +932,12 @@ int main(int argc, char **argv){
 				camera_origin += move_increment;
 				rotX += rotX_increment;
 				rotY += rotY_increment;
+				rfi += rfi_increment;
+				for (auto &obj : world){
+					if (obj.material.is_refractive){
+						obj.material.refractive_index = rfi;
+					}
+				}
 
 				cerr << "camera position: " << camera_origin << endl;
 				cerr << "angles: " << rotX << " " << rotY << endl;

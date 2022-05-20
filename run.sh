@@ -40,8 +40,9 @@ then
 	#./build/renderer -s "scenes/$SCENE" -w 300 -h 300 -a 1 -sg 1.8 -p "$SPATH" -f 30
 	#./build/renderer -s "scenes/$SCENE" -w 150 -h 150 -a 1 -sg 1.8 -p "$SPATH" -f 60
 
-	./build/renderer -s "scenes/$SCENE" -w 640 -h 480 -a 10 -sg 7.0 -p "$SPATH" -f 600
+	#./build/renderer -s "scenes/$SCENE" -w 1280 -h 840 -a 5 -sg 7.0 -p "$SPATH" -f 600
+	./build/renderer -s "scenes/$SCENE" -w 1280 -h 840 -a 5 -sg 7.0 -p "$SPATH" -f 2
 else
-	./build/renderer -s "scenes/$SCENE" -w 150 -h 150 -a 1 -sg 1.3
+	./build/renderer -s "scenes/$SCENE" -w 150 -h 150 -a 1 -sg 1.3 2> /dev/null
 fi
 conversion

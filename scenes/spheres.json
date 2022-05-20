@@ -1,7 +1,7 @@
 {
 	"models":{
 		"bunny40k": "models/bunny_40k",
-		"sphere": "models/sphere",
+		"sphere": "models/sphere_stripped",
 		"sphere30k": "models/sphere_30k"
 	},
 	"scene":[
@@ -13,7 +13,7 @@
 			"absorption": 0,
 			"specular": 0,
 			"color": [255,0,0],
-			"mode": "kdtree",
+			"mode": "sdf",
 			"rfi": 1.3
 		},
 		{
